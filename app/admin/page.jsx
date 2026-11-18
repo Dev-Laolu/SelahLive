@@ -2,8 +2,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import Icon from "@/components/Icon";
-import { useAuth } from "@/lib/auth";
-import { firebaseEnabled, getFirebaseAuth } from "@/lib/firebase";
 import { useToast } from "@/components/Toast";
 
 const NAV = [
@@ -16,14 +14,16 @@ const NAV = [
   ["set", "Settings", "sliders"],
 ];
 
+let currentCsrfToken = "";
+
 async function authFetch(url, opts = {}) {
-  let token = "demo-admin";
-  if (firebaseEnabled && getFirebaseAuth()?.currentUser) {
-    token = await getFirebaseAuth().currentUser.getIdToken();
-  }
   const r = await fetch(url, {
     ...opts,
-    headers: { ...(opts.headers || {}), Authorization: `Bearer ${token}` },
+    credentials: "include",
+    headers: {
+      ...(opts.headers || {}),
+      ...(currentCsrfToken ? { "x-csrf-token": currentCsrfToken } : {}),
+    },
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "Request failed.");
@@ -1195,44 +1195,133 @@ function SettingsTab() {
   );
 }
 
+function AdminLoginForm({ mfaEnforced, onLoggedIn }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr("");
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username, password, code }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Invalid credentials.");
+      currentCsrfToken = data.csrfToken || "";
+      onLoggedIn(data.admin);
+    } catch (er) {
+      setErr(er.message);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <div className="auth-bg">
+      <form className="auth-card" onSubmit={submit} noValidate>
+        <div style={{ display: "grid", placeItems: "center", gap: 10 }}>
+          <Logo size={44} stacked />
+          <span className="chip gold"><Icon name="shield" size={13} />Owner Admin Portal</span>
+        </div>
+        <h1 style={{ fontSize: 24, textAlign: "center" }}>Admin sign in</h1>
+        {err && <div className="banner bad"><Icon name="alertc" size={16} /><span>{err}</span></div>}
+        <div className="field">
+          <label htmlFor="admin-user">Admin username</label>
+          <input
+            id="admin-user"
+            className={`input ${err ? "error" : ""}`}
+            type="text"
+            autoComplete="username"
+            required
+            autoFocus
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Enter admin username"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="admin-pw">Password</label>
+          <div className="pw">
+            <input
+              id="admin-pw"
+              className={`input ${err ? "error" : ""}`}
+              type={showPw ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+            />
+            <button type="button" className="iconbtn" aria-label={showPw ? "Hide password" : "Show password"} onClick={() => setShowPw(!showPw)}>
+              <Icon name={showPw ? "eyeoff" : "eye"} size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="admin-code">
+            Authenticator / Recovery code {!mfaEnforced && <span className="muted">(optional)</span>}
+          </label>
+          <input
+            id="admin-code"
+            className="input mono"
+            type="text"
+            autoComplete="one-time-code"
+            required={mfaEnforced}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="6-digit TOTP or XXXXX-XXXXX"
+          />
+        </div>
+        <button className="btn btn-primary btn-block" disabled={busy || !username.trim() || !password}>
+          {busy ? "Verifying…" : "Sign in to Admin"}
+        </button>
+        <p className="muted" style={{ fontSize: 12, margin: 0, textAlign: "center" }}>
+          Protected by constant-time hash verification, lockout throttling, and 20-minute idle session timeout.
+        </p>
+      </form>
+    </div>
+  );
+}
+
 export default function Admin() {
-  const { user, demo } = useAuth();
   const [tab, setTab] = useState("dash");
-  const [isAdmin, setIsAdmin] = useState(null);
+  const [adminUser, setAdminUser] = useState(undefined); // undefined = loading, null = signed out
+  const [mfaEnforced, setMfaEnforced] = useState(false);
 
   useEffect(() => {
     (async () => {
-      if (demo) {
-        setIsAdmin(true);
-        return;
-      }
-      if (user === undefined) return;
-      if (!user) return setIsAdmin(false);
-      const u = getFirebaseAuth()?.currentUser;
-      if (!u) return setIsAdmin(false);
       try {
-        await authFetch("/api/admin/settings");
-        setIsAdmin(true);
+        const r = await fetch("/api/admin/auth/session", { credentials: "include", cache: "no-store" });
+        const data = await r.json().catch(() => ({}));
+        setMfaEnforced(!!data.mfaEnforced);
+        if (r.ok && data.authenticated) {
+          currentCsrfToken = data.csrfToken || "";
+          setAdminUser(data.admin);
+        } else {
+          setAdminUser(null);
+        }
       } catch {
-        setIsAdmin(false);
+        setAdminUser(null);
       }
     })();
-  }, [user, demo]);
+  }, []);
 
-  if (isAdmin === null) return <div className="auth-bg"><Logo size={40} /></div>;
-  if (!isAdmin) {
-    return (
-      <div className="auth-bg">
-        <div className="auth-card">
-          <Logo size={40} />
-          <h1 style={{ fontSize: 22 }}>Admins only</h1>
-          <p className="muted" style={{ margin: 0 }}>
-            Sign in with an account that has the <code className="mono">admin: true</code> custom claim. Every admin API route verifies your token on the server.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const handleLogout = async () => {
+    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    currentCsrfToken = "";
+    setAdminUser(null);
+  };
+
+  if (adminUser === undefined) return <div className="auth-bg"><Logo size={44} stacked /></div>;
+  if (!adminUser) return <AdminLoginForm mfaEnforced={mfaEnforced} onLoggedIn={(adm) => setAdminUser(adm)} />;
 
   return (
     <div className="shell no-preview">
@@ -1242,8 +1331,11 @@ export default function Admin() {
           <span className="chip gold"><Icon name="shield" size={13} />Owner Admin</span>
         </div>
         <div className="row">
-          {demo && <span className="chip warn">Local demo mode</span>}
+          <span className="chip ok"><Icon name="user" size={13} />{adminUser.username}</span>
           <a className="btn btn-ghost btn-sm" href="/app/scripture">Open app</a>
+          <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
+            <Icon name="logout" size={15} />Log out
+          </button>
         </div>
       </header>
       <nav className="nav" aria-label="Admin navigation">

@@ -112,16 +112,38 @@ export default function DisplayPage() {
   const handleLogoUpload = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const dataUrl = await readImg(f);
+    if (f.size > 2 * 1024 * 1024) {
+      toast("Image is larger than 2 MB.");
+      e.target.value = "";
+      return;
+    }
     if (f.type === "image/svg+xml") {
-      set({ logo: dataUrl });
+      const svgText = await f.text();
+      if (/<\s*(?:script|foreignObject)\b|on[a-z]+\s*=|javascript:/i.test(svgText)) {
+        toast("That SVG contains disallowed scripts or active elements.");
+        e.target.value = "";
+        return;
+      }
+      set({ logo: await readImg(f) });
     } else {
-      setCropSrc(dataUrl);
+      setCropSrc(await readImg(f));
     }
     e.target.value = "";
   };
 
-  const up = (key) => async (e) => { const f = e.target.files?.[0]; if (f) set({ [key]: await readImg(f) }); };
+  const up = (key) => async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { toast("Image is larger than 2 MB."); return; }
+    if (f.type === "image/svg+xml") {
+      const svgText = await f.text();
+      if (/<\s*(?:script|foreignObject)\b|on[a-z]+\s*=|javascript:/i.test(svgText)) {
+        toast("That SVG contains disallowed scripts or active elements.");
+        return;
+      }
+    }
+    set({ [key]: await readImg(f) });
+  };
   const save = () => { saveStyle(draft); setMode(draft.layout); setDirty(false); toast("Display settings saved."); };
   const item = { ...SAMPLE_VERSE, mode: draft.layout };
 
