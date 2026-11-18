@@ -1,5 +1,6 @@
 import {
-  authenticateAdminCredentials,
+  verifyAdminPasswordStep,
+  verifyAdminMfaStep,
   getClientIp,
   makeSessionCookie,
 } from "@/lib/server/admin";
@@ -16,30 +17,50 @@ export async function POST(request) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const { username, password, code } = body || {};
-  const result = await authenticateAdminCredentials({ username, password, code, ip });
+  const { step = "password", username, password, preAuthToken, code } = body || {};
 
-  if (!result.ok) {
-    await logAudit({ uid: username || "unknown" }, "admin.login_failed", `IP: ${ip}`).catch(() => {});
-    return Response.json({ error: result.error }, { status: result.status || 401 });
+  // Step 1: Verify Username & Password
+  if (step === "password") {
+    const res = await verifyAdminPasswordStep({ username, password, ip });
+    if (!res.ok) {
+      await logAudit({ uid: username || "unknown" }, "admin.login_failed", `Step 1 (IP: ${ip})`).catch(() => {});
+      return Response.json({ error: res.error }, { status: res.status || 401 });
+    }
+    return Response.json(
+      {
+        ok: true,
+        nextStep: res.nextStep,
+        preAuthToken: res.preAuthToken,
+        mfaSetup: res.mfaSetup,
+      },
+      { headers: { "cache-control": "no-store" } }
+    );
   }
 
-  await logAudit({ uid: result.session.uid }, "admin.login_success", `IP: ${ip}`).catch(() => {});
-
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      admin: { username: result.session.uid },
-      csrfToken: result.session.csrfToken,
-    }),
-    {
-      status: 200,
-      headers: {
-        "content-type": "application/json",
-        "set-cookie": makeSessionCookie(result.token),
-        "cache-control": "no-store",
-      },
+  // Step 2: Verify MFA TOTP / Recovery Code (and finalize MFA setup if first time)
+  if (step === "mfa") {
+    const res = await verifyAdminMfaStep({ preAuthToken, code, ip });
+    if (!res.ok) {
+      await logAudit({ uid: "admin" }, "admin.mfa_failed", `Step 2 (IP: ${ip})`).catch(() => {});
+      return Response.json({ error: res.error }, { status: res.status || 401 });
     }
-  );
-}
+    await logAudit({ uid: res.session.uid }, "admin.login_success", `MFA verified (IP: ${ip})`).catch(() => {});
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        admin: { username: res.session.uid },
+        csrfToken: res.session.csrfToken,
+      }),
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "set-cookie": makeSessionCookie(res.token),
+          "cache-control": "no-store",
+        },
+      }
+    );
+  }
 
+  return Response.json({ error: "Unknown login step." }, { status: 400 });
+}

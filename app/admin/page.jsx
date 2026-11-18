@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Logo from "@/components/Logo";
 import Icon from "@/components/Icon";
 import { useToast } from "@/components/Toast";
+import { encodeQrMatrix } from "@/lib/qr";
 
 const NAV = [
   ["dash", "Dashboard", "chart"],
@@ -14,7 +15,9 @@ const NAV = [
   ["set", "Settings", "sliders"],
 ];
 
+const IDLE_LIMIT_MS = 10 * 60 * 1000; // 10 minutes inactivity auto-logout
 let currentCsrfToken = "";
+let onUnauthorizedCallback = null;
 
 async function authFetch(url, opts = {}) {
   const r = await fetch(url, {
@@ -26,8 +29,43 @@ async function authFetch(url, opts = {}) {
     },
   });
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && onUnauthorizedCallback) {
+    onUnauthorizedCallback("Your session expired after 10 minutes of inactivity. Please sign in again.");
+  }
   if (!r.ok) throw new Error(j.error || "Request failed.");
   return j;
+}
+
+function QrCodeSvg({ value, size = 184 }) {
+  const matrix = useMemo(() => {
+    try {
+      return encodeQrMatrix(value);
+    } catch {
+      return null;
+    }
+  }, [value]);
+  if (!matrix) return null;
+  const n = matrix.length;
+  const pad = 3;
+  const total = n + pad * 2;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${total} ${total}`}
+      shapeRendering="crispEdges"
+      role="img"
+      aria-label="Google Authenticator QR code"
+      style={{ borderRadius: 12, background: "#FFFFFF", padding: 4, border: "2px solid var(--gold)" }}
+    >
+      <rect width={total} height={total} fill="#FFFFFF" />
+      {matrix.map((row, r) =>
+        Array.from(row).map((cell, c) =>
+          cell ? <rect key={`${r}-${c}`} x={c + pad} y={r + pad} width={1} height={1} fill="#0B1020" /> : null
+        )
+      )}
+    </svg>
+  );
 }
 
 function downloadCsv(filename, headers, rows) {
@@ -1195,15 +1233,19 @@ function SettingsTab() {
   );
 }
 
-function AdminLoginForm({ mfaEnforced, onLoggedIn }) {
+function AdminLoginForm({ initialNotice = "", onLoggedIn }) {
+  const toast = useToast();
+  const [step, setStep] = useState("password"); // "password" | "setup_mfa" | "verify_mfa"
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [preAuthToken, setPreAuthToken] = useState("");
+  const [mfaSetup, setMfaSetup] = useState(null);
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
+  const [err, setErr] = useState(initialNotice);
 
-  const submit = async (e) => {
+  const submitPasswordStep = async (e) => {
     e.preventDefault();
     setErr("");
     setBusy(true);
@@ -1212,10 +1254,33 @@ function AdminLoginForm({ mfaEnforced, onLoggedIn }) {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username, password, code }),
+        body: JSON.stringify({ step: "password", username, password }),
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error || "Invalid credentials.");
+      if (!r.ok) throw new Error(data.error || "Invalid username or password.");
+      setPreAuthToken(data.preAuthToken);
+      setMfaSetup(data.mfaSetup || null);
+      setCode("");
+      setStep(data.nextStep); // "setup_mfa" or "verify_mfa"
+    } catch (er) {
+      setErr(er.message);
+    }
+    setBusy(false);
+  };
+
+  const submitMfaStep = async (e) => {
+    e.preventDefault();
+    setErr("");
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ step: "mfa", preAuthToken, code }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Invalid verification code.");
       currentCsrfToken = data.csrfToken || "";
       onLoggedIn(data.admin);
     } catch (er) {
@@ -1226,67 +1291,167 @@ function AdminLoginForm({ mfaEnforced, onLoggedIn }) {
 
   return (
     <div className="auth-bg">
-      <form className="auth-card" onSubmit={submit} noValidate>
-        <div style={{ display: "grid", placeItems: "center", gap: 10 }}>
-          <Logo size={44} stacked />
-          <span className="chip gold"><Icon name="shield" size={13} />Owner Admin Portal</span>
-        </div>
-        <h1 style={{ fontSize: 24, textAlign: "center" }}>Admin sign in</h1>
-        {err && <div className="banner bad"><Icon name="alertc" size={16} /><span>{err}</span></div>}
-        <div className="field">
-          <label htmlFor="admin-user">Admin username</label>
-          <input
-            id="admin-user"
-            className={`input ${err ? "error" : ""}`}
-            type="text"
-            autoComplete="username"
-            required
-            autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter admin username"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="admin-pw">Password</label>
-          <div className="pw">
+      {step === "password" && (
+        <form className="auth-card" onSubmit={submitPasswordStep} noValidate>
+          <div style={{ display: "grid", placeItems: "center", gap: 10 }}>
+            <Logo size={44} stacked />
+            <span className="chip gold"><Icon name="shield" size={13} />Owner Admin Portal</span>
+          </div>
+          <h1 style={{ fontSize: 24, textAlign: "center" }}>Admin sign in</h1>
+          {err && <div className="banner bad"><Icon name="alertc" size={16} /><span>{err}</span></div>}
+          <div className="field">
+            <label htmlFor="admin-user">Admin username</label>
             <input
-              id="admin-pw"
+              id="admin-user"
               className={`input ${err ? "error" : ""}`}
-              type={showPw ? "text" : "password"}
-              autoComplete="current-password"
+              type="text"
+              autoComplete="username"
               required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
+              autoFocus
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter admin username"
             />
-            <button type="button" className="iconbtn" aria-label={showPw ? "Hide password" : "Show password"} onClick={() => setShowPw(!showPw)}>
-              <Icon name={showPw ? "eyeoff" : "eye"} size={18} />
+          </div>
+          <div className="field">
+            <label htmlFor="admin-pw">Password</label>
+            <div className="pw">
+              <input
+                id="admin-pw"
+                className={`input ${err ? "error" : ""}`}
+                type={showPw ? "text" : "password"}
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+              />
+              <button type="button" className="iconbtn" aria-label={showPw ? "Hide password" : "Show password"} onClick={() => setShowPw(!showPw)}>
+                <Icon name={showPw ? "eyeoff" : "eye"} size={18} />
+              </button>
+            </div>
+          </div>
+          <button className="btn btn-primary btn-block" disabled={busy || !username.trim() || !password}>
+            {busy ? "Verifying…" : "Continue"}
+          </button>
+          <p className="muted" style={{ fontSize: 12, margin: 0, textAlign: "center" }}>
+            Step 1 of 2 · Next: Two-Factor Authentication (MFA)
+          </p>
+        </form>
+      )}
+
+      {step === "setup_mfa" && mfaSetup && (
+        <form className="auth-card" style={{ width: "min(540px, 100%)" }} onSubmit={submitMfaStep} noValidate>
+          <div style={{ display: "grid", placeItems: "center", gap: 8 }}>
+            <Logo size={38} stacked />
+            <span className="chip warn"><Icon name="shield" size={13} />First-Time MFA Setup Required</span>
+          </div>
+          <h1 style={{ fontSize: 22, textAlign: "center" }}>Set up Google Authenticator</h1>
+          <p className="muted" style={{ fontSize: 13, margin: 0, textAlign: "center" }}>
+            Scan this QR code with <b>Google Authenticator</b> (or enter the setup key manually), then type the 6-digit code below to activate MFA.
+          </p>
+          {err && <div className="banner bad"><Icon name="alertc" size={16} /><span>{err}</span></div>}
+
+          <div style={{ display: "grid", placeItems: "center", padding: "8px 0" }}>
+            <QrCodeSvg value={mfaSetup.otpauthUrl} size={184} />
+          </div>
+
+          <div className="card raised col" style={{ padding: 12, gap: 6 }}>
+            <div className="row between">
+              <span className="label">Manual setup key</span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => { navigator.clipboard?.writeText(mfaSetup.secret); toast("MFA setup key copied."); }}
+              >
+                <Icon name="copy" size={14} />Copy key
+              </button>
+            </div>
+            <div className="mono gold" style={{ fontSize: 13, wordBreak: "break-all" }}>{mfaSetup.secret}</div>
+          </div>
+
+          {mfaSetup.recoveryCodes?.length > 0 && (
+            <div className="card raised col" style={{ padding: 12, gap: 6 }}>
+              <div className="row between">
+                <span className="label">10 single-use recovery codes (save these now)</span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => { navigator.clipboard?.writeText(mfaSetup.recoveryCodes.join("\n")); toast("Recovery codes copied."); }}
+                >
+                  <Icon name="copy" size={14} />Copy codes
+                </button>
+              </div>
+              <div className="grid2 mono muted" style={{ fontSize: 12, gap: 4 }}>
+                {mfaSetup.recoveryCodes.map((c) => <span key={c}>{c}</span>)}
+              </div>
+            </div>
+          )}
+
+          <div className="field">
+            <label htmlFor="mfa-setup-code">Enter 6-digit code from Google Authenticator</label>
+            <input
+              id="mfa-setup-code"
+              className="input mono"
+              style={{ fontSize: 18, textAlign: "center", letterSpacing: "0.2em" }}
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="000000"
+            />
+          </div>
+
+          <div className="row">
+            <button type="button" className="btn btn-secondary" onClick={() => { setStep("password"); setErr(""); }}>
+              <Icon name="left" size={16} />Back
+            </button>
+            <button type="submit" className="btn btn-primary grow" disabled={busy || !code.trim()}>
+              {busy ? "Activating MFA…" : "Verify & Complete Setup"}
             </button>
           </div>
-        </div>
-        <div className="field">
-          <label htmlFor="admin-code">
-            Authenticator / Recovery code {!mfaEnforced && <span className="muted">(optional)</span>}
-          </label>
-          <input
-            id="admin-code"
-            className="input mono"
-            type="text"
-            autoComplete="one-time-code"
-            required={mfaEnforced}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="6-digit TOTP or XXXXX-XXXXX"
-          />
-        </div>
-        <button className="btn btn-primary btn-block" disabled={busy || !username.trim() || !password}>
-          {busy ? "Verifying…" : "Sign in to Admin"}
-        </button>
-        <p className="muted" style={{ fontSize: 12, margin: 0, textAlign: "center" }}>
-          Protected by constant-time hash verification, lockout throttling, and 20-minute idle session timeout.
-        </p>
-      </form>
+        </form>
+      )}
+
+      {step === "verify_mfa" && (
+        <form className="auth-card" onSubmit={submitMfaStep} noValidate>
+          <div style={{ display: "grid", placeItems: "center", gap: 10 }}>
+            <Logo size={44} stacked />
+            <span className="chip gold"><Icon name="shield" size={13} />Step 2 of 2 · MFA Verification</span>
+          </div>
+          <h1 style={{ fontSize: 22, textAlign: "center" }}>Enter your MFA code</h1>
+          <p className="muted" style={{ fontSize: 13, margin: 0, textAlign: "center" }}>
+            Open <b>Google Authenticator</b> and enter the 6-digit verification code for <b>{username || "devlaolu"}</b> (or enter a single-use recovery code).
+          </p>
+          {err && <div className="banner bad"><Icon name="alertc" size={16} /><span>{err}</span></div>}
+          <div className="field">
+            <label htmlFor="admin-mfa-code">6-digit Authenticator or Recovery code</label>
+            <input
+              id="admin-mfa-code"
+              className={`input mono ${err ? "error" : ""}`}
+              style={{ fontSize: 18, textAlign: "center", letterSpacing: "0.18em" }}
+              type="text"
+              autoComplete="one-time-code"
+              required
+              autoFocus
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="000000"
+            />
+          </div>
+          <div className="row">
+            <button type="button" className="btn btn-secondary" onClick={() => { setStep("password"); setErr(""); }}>
+              <Icon name="left" size={16} />Back
+            </button>
+            <button type="submit" className="btn btn-primary grow" disabled={busy || !code.trim()}>
+              {busy ? "Verifying…" : "Verify & Sign in"}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -1294,16 +1459,29 @@ function AdminLoginForm({ mfaEnforced, onLoggedIn }) {
 export default function Admin() {
   const [tab, setTab] = useState("dash");
   const [adminUser, setAdminUser] = useState(undefined); // undefined = loading, null = signed out
-  const [mfaEnforced, setMfaEnforced] = useState(false);
+  const [logoutNotice, setLogoutNotice] = useState("");
+  const lastActivityRef = useRef(Date.now());
+
+  const handleLogout = async (notice = "") => {
+    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    currentCsrfToken = "";
+    setLogoutNotice(typeof notice === "string" ? notice : "");
+    setAdminUser(null);
+  };
+
+  useEffect(() => {
+    onUnauthorizedCallback = (msg) => handleLogout(msg);
+    return () => { onUnauthorizedCallback = null; };
+  }, []);
 
   useEffect(() => {
     (async () => {
       try {
         const r = await fetch("/api/admin/auth/session", { credentials: "include", cache: "no-store" });
         const data = await r.json().catch(() => ({}));
-        setMfaEnforced(!!data.mfaEnforced);
         if (r.ok && data.authenticated) {
           currentCsrfToken = data.csrfToken || "";
+          lastActivityRef.current = Date.now();
           setAdminUser(data.admin);
         } else {
           setAdminUser(null);
@@ -1314,14 +1492,38 @@ export default function Admin() {
     })();
   }, []);
 
-  const handleLogout = async () => {
-    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => { });
-    currentCsrfToken = "";
-    setAdminUser(null);
-  };
+  // 10-minute inactivity auto-logout watcher + sliding session refresh when active
+  useEffect(() => {
+    if (!adminUser) return;
+    lastActivityRef.current = Date.now();
+    let lastPingAt = Date.now();
+
+    const onActivity = () => {
+      const now = Date.now();
+      lastActivityRef.current = now;
+      if (now - lastPingAt > 2 * 60 * 1000) {
+        lastPingAt = now;
+        fetch("/api/admin/auth/session", { credentials: "include", cache: "no-store" }).catch(() => {});
+      }
+    };
+
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+    events.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
+
+    const timer = setInterval(() => {
+      if (Date.now() - lastActivityRef.current >= IDLE_LIMIT_MS) {
+        handleLogout("Logged out automatically after 10 minutes of inactivity.");
+      }
+    }, 5000);
+
+    return () => {
+      events.forEach((ev) => window.removeEventListener(ev, onActivity));
+      clearInterval(timer);
+    };
+  }, [adminUser]);
 
   if (adminUser === undefined) return <div className="auth-bg"><Logo size={44} stacked /></div>;
-  if (!adminUser) return <AdminLoginForm mfaEnforced={mfaEnforced} onLoggedIn={(adm) => setAdminUser(adm)} />;
+  if (!adminUser) return <AdminLoginForm initialNotice={logoutNotice} onLoggedIn={(adm) => { setLogoutNotice(""); setAdminUser(adm); }} />;
 
   return (
     <div className="shell no-preview">
@@ -1331,9 +1533,10 @@ export default function Admin() {
           <span className="chip gold"><Icon name="shield" size={13} />Owner Admin</span>
         </div>
         <div className="row">
+          <span className="chip" title="Auto-logout after 10 minutes of inactivity"><Icon name="clock" size={13} />10m idle lock</span>
           <span className="chip ok"><Icon name="user" size={13} />{adminUser.username}</span>
           <a className="btn btn-ghost btn-sm" href="/app/scripture">Open app</a>
-          <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
+          <button className="btn btn-secondary btn-sm" onClick={() => handleLogout("")}>
             <Icon name="logout" size={15} />Log out
           </button>
         </div>
