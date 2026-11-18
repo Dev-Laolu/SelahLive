@@ -32,3 +32,4 @@ console.log("Add these to your .env.local / Vercel Environment Variables:\n");
 console.log(`ADMIN_TOTP_SECRET="${secretBase32}"`);
 console.log(`ADMIN_RECOVERY_HASHES="${recoveryHashes.join(",")}"`);
 console.log("==========================================================");
+

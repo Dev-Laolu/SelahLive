@@ -19,3 +19,4 @@ rl.question("Enter admin password to hash: ", (pw) => {
   console.log("\nPaste this into your .env.local / Vercel Environment Variables:\n");
   console.log(`ADMIN_PASSWORD_HASH="${hashPassword(pw)}"\n`);
 });
+

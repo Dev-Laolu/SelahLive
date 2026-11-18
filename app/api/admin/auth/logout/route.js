@@ -13,7 +13,7 @@ export async function POST(request) {
   const sess = await verifyAdminSessionCookie(request, false);
   await destroyAdminSession(request);
   if (sess) {
-    await logAudit({ uid: sess.uid }, "admin.logout", `IP: ${ip}`).catch(() => {});
+    await logAudit({ uid: sess.uid }, "admin.logout", `IP: ${ip}`).catch(() => { });
   }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
@@ -24,3 +24,4 @@ export async function POST(request) {
     },
   });
 }
+

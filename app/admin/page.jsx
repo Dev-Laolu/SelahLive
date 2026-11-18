@@ -1315,7 +1315,7 @@ export default function Admin() {
   }, []);
 
   const handleLogout = async () => {
-    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => { });
     currentCsrfToken = "";
     setAdminUser(null);
   };

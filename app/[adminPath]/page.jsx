@@ -14,3 +14,4 @@ export default async function SecretAdminPage({ params }) {
   }
   return <Admin />;
 }
+
