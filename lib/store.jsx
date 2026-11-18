@@ -591,7 +591,8 @@ export function AppProvider({ children }) {
       chunks.forEach((c) => { rawBytes.set(c, o); o += c.length; });
 
       let bytes = rawBytes;
-      if (entry.url.endsWith(".gz")) {
+      const isGzipMagic = rawBytes.length >= 2 && rawBytes[0] === 0x1f && rawBytes[1] === 0x8b;
+      if (isGzipMagic) {
         bytes = gunzipSync(rawBytes);
       } else if (entry.url.endsWith(".zip")) {
         const z = unzipSync(rawBytes);
