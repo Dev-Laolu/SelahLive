@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Icon from "./Icon";
 import Logo from "./Logo";
+import Select from "./Select";
 import { PreviewFrame } from "./Overlay";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -19,13 +20,27 @@ const NAV = [
 ];
 
 export function PreviewPane({ pending }) {
-  const { style, mode, setMode, live, show, hide } = useApp();
-  const item = live || (pending ? { ...pending, mode } : { ...SAMPLE_VERSE, mode });
+  const {
+    style, themes, activeThemeIds, getThemeForKind, selectThemeForSlot, assetsMap,
+    mode, setMode, live, liveFollow, setLiveFollow,
+    show, takeLive, hide, clearText, blackout, logoScreen,
+  } = useApp();
+
+  const item = pending ? { ...pending, mode } : live || { ...SAMPLE_VERSE, mode };
+  const previewTheme = getThemeForKind(item.kind || "scripture");
+  const slot = item.kind === "song" ? "songs" : item.kind === "text" ? "text" : "scripture";
   const canShow = !!pending;
+  const isDifferentFromLive = live && pending && (live.title !== pending.title || live.body !== pending.body || live.mode !== mode);
+
   return (
     <aside className="preview-pane" aria-label="Live preview">
-      <div className="row between"><h3 style={{ fontSize: 16 }}>Live preview</h3>{live ? <span className="chip live"><span className="dot bad pulse" />On screen</span> : <span className="chip">Ready</span>}</div>
-      <PreviewFrame item={{ ...item, mode: live ? live.mode : mode }} style={style} />
+      <div className="row between">
+        <h3 style={{ fontSize: 16 }}>Live preview</h3>
+        {live ? <span className="chip live"><span className="dot bad pulse" />On screen</span> : <span className="chip">Ready</span>}
+      </div>
+
+      <PreviewFrame item={live && liveFollow ? live : item} style={style} theme={previewTheme} assetsMap={assetsMap} />
+
       <div className="col" style={{ gap: 6 }}>
         <span className="label">Display mode</span>
         <div className="seg" role="group" aria-label="Display mode">
@@ -33,11 +48,60 @@ export function PreviewPane({ pending }) {
           <button aria-pressed={mode === "fullScreen"} onClick={() => setMode("fullScreen")}>Full screen</button>
         </div>
       </div>
+
+      <div className="row between" style={{ padding: "6px 0" }}>
+        <div className="col" style={{ gap: 2 }}>
+          <label id="live-follow-lbl" style={{ fontSize: 13, fontWeight: 600 }}>Live follow</label>
+          <span className="muted" style={{ fontSize: 11 }}>{liveFollow ? "Changes update live immediately" : "Preview first — press Take Live"}</span>
+        </div>
+        <button
+          type="button"
+          className="toggle"
+          role="switch"
+          aria-checked={liveFollow}
+          aria-labelledby="live-follow-lbl"
+          onClick={() => setLiveFollow(!liveFollow)}
+        />
+      </div>
+
+      <div className="col" style={{ gap: 6 }}>
+        <span className="label">Theme ({slot})</span>
+        <Select
+          ariaLabel="Overlay theme"
+          value={activeThemeIds[slot] || previewTheme.id}
+          onChange={(tid) => selectThemeForSlot(slot, tid)}
+          options={themes.map((t) => ({ value: t.id, label: t.name, sub: t.slot }))}
+        />
+      </div>
+
       <div style={{ flex: 1 }} />
-      {live
-        ? <button className="btn btn-lg show-btn live" onClick={hide}><Icon name="eyeoff" size={24} />HIDE</button>
-        : <button className="btn btn-primary btn-lg show-btn" disabled={!canShow} onClick={() => pending && show(pending)}><Icon name="play" size={24} />SHOW</button>}
-      <div className="muted" style={{ fontSize: 12, textAlign: "center" }}><span className="kbd">Enter</span> show · <span className="kbd">Esc</span> hide · <span className="kbd">←</span> <span className="kbd">→</span> step</div>
+
+      {live ? (
+        <div className="col" style={{ gap: 8 }}>
+          {!liveFollow && isDifferentFromLive && (
+            <button className="btn btn-primary btn-lg show-btn" onClick={() => takeLive(pending)}>
+              <Icon name="play" size={22} />TAKE LIVE
+            </button>
+          )}
+          <button className="btn btn-lg show-btn live" onClick={hide}>
+            <Icon name="eyeoff" size={24} />HIDE
+          </button>
+        </div>
+      ) : (
+        <button className="btn btn-primary btn-lg show-btn" disabled={!canShow} onClick={() => pending && show(pending)}>
+          <Icon name="play" size={24} />SHOW
+        </button>
+      )}
+
+      <div className="row" style={{ gap: 6 }}>
+        <button className="btn btn-secondary btn-sm grow" title="Clear text only (keep background & logo)" onClick={clearText}>Clear text</button>
+        <button className="btn btn-secondary btn-sm grow" title="Blackout full screen" onClick={blackout}>Blackout</button>
+        <button className="btn btn-secondary btn-sm grow" title="Show church logo screen" onClick={logoScreen}>Logo</button>
+      </div>
+
+      <div className="muted" style={{ fontSize: 12, textAlign: "center" }}>
+        <span className="kbd">Enter</span> {live && !liveFollow ? "take live" : "show"} · <span className="kbd">Esc</span> hide · <span className="kbd">←</span> <span className="kbd">→</span> step
+      </div>
     </aside>
   );
 }
@@ -75,10 +139,10 @@ export default function AppShell({ children, pending, preview = true }) {
   useEffect(() => { if (ready && user && !setupDone && path !== "/app/settings") router.replace("/setup"); }, [ready, user, setupDone, path, router]);
   useEffect(() => { const k = (e) => { if (e.key === "Escape" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { hide(); setBell(false); } }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [hide]);
 
-  if (!ready || user === undefined) return <div className="auth-bg"><Logo size={48} /></div>;
+  if (!ready || user === undefined) return <div className="auth-bg"><Logo size={48} stacked /></div>;
   const obsChip = obsStatus === "connected" ? <span className="chip ok"><Icon name="checkc" size={14} />OBS connected</span>
     : obsStatus === "connecting" ? <span className="chip warn"><Icon name="loader" size={14} className="spin" />Connecting…</span>
-      : <span className="chip bad"><Icon name="alertc" size={14} />OBS not connected</span>;
+    : <span className="chip bad"><Icon name="alertc" size={14} />OBS not connected</span>;
 
   return (
     <div className={`shell ${preview ? "" : "no-preview"}`}>
@@ -87,7 +151,7 @@ export default function AppShell({ children, pending, preview = true }) {
         <div className="row" style={{ gap: 10 }}>
           {!online && <span className="chip warn"><Icon name="wifioff" size={14} />Offline</span>}
           {obsChip}
-          {live && <span className="chip live"><span className="dot bad pulse" />Live: {live.title}</span>}
+          {live && <span className="chip live"><span className="dot bad pulse" />Live: {live.clearMode === "blackout" ? "Blackout" : live.clearMode === "logoScreen" ? "Logo" : live.title || "On screen"}</span>}
           <button className="iconbtn" aria-label="Notifications" onClick={() => setBell((b) => !b)}><Icon name="bell" size={20} />{notices.length > 0 && <span className="dot gold" style={{ position: "absolute", top: 10, right: 10 }} />}</button>
           <div style={{ position: "relative" }}>
             <button className="iconbtn" aria-label="Account menu" onClick={() => setMenu((m) => !m)} style={{ background: "var(--gold)", color: "var(--on-gold)", borderRadius: "50%", width: 36, height: 36 }}><Icon name="user" size={18} /></button>

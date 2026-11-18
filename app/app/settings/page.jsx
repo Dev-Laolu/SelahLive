@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Icon from "@/components/Icon";
+import Select from "@/components/Select";
 import { useApp } from "@/lib/store";
 import { useAuth, friendly } from "@/lib/auth";
 import { OBS_ERRORS } from "@/lib/obs";
@@ -74,9 +75,14 @@ export default function SettingsPage() {
           <div className="field" style={{ marginTop: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
             <label htmlFor="scene-pick">Add overlay to a different scene</label>
             <div className="row wrap">
-              <select id="scene-pick" className="select grow" value={scene} onChange={(e) => setScene(e.target.value)}>
-                {scenes.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select
+                id="scene-pick"
+                ariaLabel="OBS Scene"
+                className="grow"
+                value={scene}
+                onChange={setScene}
+                options={scenes.map((s) => ({ value: s, label: s }))}
+              />
               <button className="btn btn-secondary" onClick={addOverlayToScene}>Add overlay to scene</button>
             </div>
           </div>

@@ -311,3 +311,106 @@ dialog::backdrop {
   .data-table td:nth-child(8)::before { content: var(--label-8) ": "; color: var(--text-2); font-weight: 600; }
   .data-table td:nth-child(9)::before { content: var(--label-9) ": "; color: var(--text-2); font-weight: 600; }
 }
+
+/* V1.1 global color-scheme & thin scrollbars */
+:root {
+  color-scheme: dark;
+  --scrollbar-track: #0B1020;
+  --scrollbar-thumb: #2A3558;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --scrollbar-track: #F7F8FC;
+  --scrollbar-thumb: #B6C0DA;
+}
+@supports not (scrollbar-color: auto) {
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+  *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 99px; }
+}
+
+/* Custom accessible Select & Combobox (V1.1 §2) */
+.cselect { position: relative; min-width: 110px; }
+.cselect-trigger {
+  width: 100%; min-height: 44px; padding: 8px 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--raised); border: 1px solid var(--border); border-radius: var(--r-ctl);
+  color: var(--text); font-weight: 500; text-align: left;
+  transition: border-color .15s, background .15s;
+}
+.cselect-trigger:hover { background: var(--raised-2); border-color: var(--blue); }
+.cselect-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.cselect-trigger[disabled] { opacity: .5; pointer-events: none; }
+.cselect-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.cselect-chev { color: var(--text-2); transition: transform .15s ease-out; }
+.cselect.is-open .cselect-chev { transform: rotate(180deg); color: var(--gold); }
+.cselect-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; min-width: 100%;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 18px 40px -10px rgba(3, 7, 18, 0.72);
+  z-index: 160; overflow: hidden; animation: up .14s ease-out;
+}
+.cselect-search {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); background: var(--bg);
+}
+.cselect-search input {
+  width: 100%; border: 0; background: transparent; color: var(--text);
+  font-size: 13px; outline: none;
+}
+.cselect-list {
+  max-height: 320px; overflow-y: auto; padding: 4px;
+  scrollbar-width: thin;
+}
+@supports not (scrollbar-color: auto) {
+  .cselect-list { scrollbar-width: auto; }
+  .cselect-list::-webkit-scrollbar { width: 6px; }
+  .cselect-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+}
+.cselect-item {
+  width: 100%; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text); text-align: left;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.cselect-item:hover, .cselect-item.is-active { background: var(--raised); }
+.cselect-item.is-selected { font-weight: 700; color: var(--text); }
+.cselect-item-text { display: flex; flex-direction: column; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cselect-empty { padding: 14px 12px; text-align: center; font-size: 13px; }
+
+/* Smart Search highlight & suggestions */
+.hl { background: rgba(232, 184, 74, 0.28); color: var(--gold-hi); border-radius: 3px; padding: 0 2px; font-weight: 600; }
+
+/* Overlay V1.1 content transitions (smooth update without replaying bar entrance) */
+.ov-lt-smooth { transition: height 250ms ease, width 250ms ease, bottom 250ms ease, left 250ms ease, border-radius 200ms ease; }
+.ov-content-fade { animation: ovfade var(--tdur, 250ms) var(--tease, ease-out) both; }
+.ov-content-slide-up { animation: ovc-up var(--tdur, 250ms) var(--tease, ease-out) both; }
+.ov-content-slide-left { animation: ovc-left var(--tdur, 250ms) var(--tease, ease-out) both; }
+.ov-content-zoom { animation: ovc-zoom var(--tdur, 250ms) var(--tease, ease-out) both; }
+.ov-content-none { animation: none; }
+@keyframes ovc-up { from { opacity: 0; transform: translateY(18px); } }
+@keyframes ovc-left { from { opacity: 0; transform: translateX(28px); } }
+@keyframes ovc-zoom { from { opacity: 0; transform: scale(0.95); } }
+
+/* Canvas editor guides & interactive handles */
+.canvas-guide-safe {
+  position: absolute; inset: 5% 5%; border: 1px dashed rgba(232, 184, 74, 0.55);
+  pointer-events: none; z-index: 20;
+}
+.canvas-guide-cx {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+  background: rgba(91, 140, 255, 0.45); pointer-events: none; z-index: 20;
+}
+.canvas-guide-cy {
+  position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+  background: rgba(91, 140, 255, 0.45); pointer-events: none; z-index: 20;
+}
+.canvas-drag-box {
+  position: absolute; border: 2px solid var(--blue); border-radius: 6px;
+  cursor: move; z-index: 30; background: rgba(91, 140, 255, 0.08);
+}
+.canvas-resize-handle {
+  position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px;
+  background: var(--gold); border: 2px solid #0B1020; border-radius: 3px;
+  cursor: nwse-resize; z-index: 35;
+}

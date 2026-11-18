@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Icon from "@/components/Icon";
 import Logo from "@/components/Logo";
+import Select from "@/components/Select";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { OBS_ERRORS } from "@/lib/obs";
@@ -62,7 +63,7 @@ export default function Setup() {
           {obsStatus === "error" && <div className="banner bad" style={{ alignItems: "flex-start" }}><Icon name="alertc" size={18} /><div><b>{obsError === "wrongPassword" ? "Wrong password" : "Can't reach OBS"}</b><div>{OBS_ERRORS[obsError] || OBS_ERRORS.notRunning}</div></div></div>}</div>}
 
         {step === 3 && <div className="col" style={{ maxWidth: 520 }}><span className="gold label">Step 4 of 6</span><h1 style={{ fontSize: 30 }}>Add the overlay to OBS</h1>
-          <div className="field"><label htmlFor="sc">Scene</label><select id="sc" className="select" value={scene} onChange={(e) => setScene(e.target.value)}>{scenes.map((s) => <option key={s}>{s}</option>)}</select></div>
+          <div className="field"><label htmlFor="sc">Scene</label><Select id="sc" ariaLabel="OBS Scene" value={scene} onChange={setScene} options={scenes.map((s) => ({ value: s, label: s }))} placeholder="Select a scene…" /></div>
           <div><button className="btn btn-primary" disabled={!scene || added === "busy"} onClick={addOverlay}>{added === "busy" ? "Adding…" : "Add overlay to OBS"}</button></div>
           {addErr && <div className="err"><Icon name="alertc" size={16} />{addErr}</div>}
           <div className="card raised col" style={{ gap: 10 }}>

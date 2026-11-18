@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { gzipSync } from "fflate";
 import Logo from "@/components/Logo";
 import Icon from "@/components/Icon";
+import Select from "@/components/Select";
 import { useToast } from "@/components/Toast";
 import { encodeQrMatrix } from "@/lib/qr";
 
@@ -32,7 +34,12 @@ async function authFetch(url, opts = {}) {
   if (r.status === 401 && onUnauthorizedCallback) {
     onUnauthorizedCallback("Your session expired after 10 minutes of inactivity. Please sign in again.");
   }
-  if (!r.ok) throw new Error(j.error || "Request failed.");
+  if (!r.ok) {
+    const err = new Error(j.error || "Request failed.");
+    err.status = r.status;
+    err.data = j;
+    throw err;
+  }
   return j;
 }
 
@@ -322,6 +329,10 @@ function BiblesTab() {
   const [err, setErr] = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
   const [viewBible, setViewBible] = useState(null);
+  const [mfaModal, setMfaModal] = useState(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaErr, setMfaErr] = useState("");
+  const [compressNote, setCompressNote] = useState("");
   const [meta, setMeta] = useState({
     name: "",
     code: "",
@@ -333,22 +344,51 @@ function BiblesTab() {
     notify: true,
   });
 
+  const LARGE_FILE_THRESHOLD = 3 * 1024 * 1024;
   const load = () => authFetch("/api/admin/bible").then((r) => setBibles(r.bibles || [])).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
 
-  const runUpload = async (action = "validate") => {
+  const requestUpload = (action = "validate") => {
     if (!file) return;
-    setBusy(true); setErr("");
+    setErr("");
+    if (file.size > LARGE_FILE_THRESHOLD || action === "draft") {
+      setMfaCode("");
+      setMfaErr("");
+      setMfaModal({ action });
+      return;
+    }
+    runUpload(action, "");
+  };
+
+  const runUpload = async (action = "validate", suppliedMfaCode = "") => {
+    if (!file) return;
+    setBusy(true); setErr(""); setMfaErr("");
     try {
+      // Compress in the browser with gzip so large Bible files (e.g. 6-15 MB) stay well under Vercel's 4.5 MB limit
+      const rawBytes = new Uint8Array(await file.arrayBuffer());
+      const gzBytes = gzipSync(rawBytes, { level: 6 });
+      const origMb = (rawBytes.byteLength / (1024 * 1024)).toFixed(2);
+      const gzMb = (gzBytes.byteLength / (1024 * 1024)).toFixed(2);
+      setCompressNote(`${file.name} (${origMb} MB → ${gzMb} MB gzipped)`);
+
+      if (gzBytes.byteLength > 4.3 * 1024 * 1024) {
+        throw new Error(`Compressed file (${gzMb} MB) still exceeds the 4.3 MB upload limit.`);
+      }
+
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", new Blob([gzBytes], { type: "application/gzip" }), `${file.name}.gz`);
+      fd.append("compressed", "gzip");
+      fd.append("originalName", file.name);
       fd.append("action", action);
+      if (suppliedMfaCode) fd.append("mfaCode", suppliedMfaCode.trim());
       fd.append("name", meta.name);
       fd.append("code", meta.code);
       fd.append("language", meta.language);
       fd.append("license", meta.license);
       fd.append("rights", String(meta.rights));
       const res = await authFetch("/api/admin/bible/upload", { method: "POST", body: fd });
+      setMfaModal(null);
+      setMfaCode("");
       setRep(res);
       if (res.draft) {
         setDraft(res.draft);
@@ -359,7 +399,13 @@ function BiblesTab() {
         load();
       }
     } catch (e) {
-      setErr(e.message);
+      if (e.data?.mfaRequired) {
+        setMfaErr(e.message || "Please enter your 6-digit Google Authenticator code.");
+        setMfaModal({ action });
+      } else {
+        setMfaModal(null);
+        setErr(e.message);
+      }
     }
     setBusy(false);
   };
@@ -456,20 +502,20 @@ function BiblesTab() {
 
       <div className="card col" style={{ gap: 16 }}>
         <h3>Upload Bible version (.js, .json or .xml)</h3>
-        <label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { setFile(f); setRep(null); setDraft(null); } }}>
+        <label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { setFile(f); setRep(null); setDraft(null); setCompressNote(""); } }}>
           <div>
             <Icon name="upload" size={28} className="gold" />
-            <div style={{ marginTop: 6 }}><b>{file ? `${file.name} (${(file.size / 1024).toFixed(1)} KB)` : "Drop a .js, .json or .xml Bible file, or click to choose"}</b></div>
-            <div className="muted" style={{ fontSize: 12 }}>Supports JS (var bible_data = [...]), JSON (books → chapters → verses), Zefania XML, and OSIS XML up to 50 MB.</div>
+            <div style={{ marginTop: 6 }}><b>{file ? (compressNote || `${file.name} (${(file.size / 1024).toFixed(1)} KB)`) : "Drop a .js, .json or .xml Bible file, or click to choose"}</b></div>
+            <div className="muted" style={{ fontSize: 12 }}>Supports JS (var bible_data = [...]), JSON (books → chapters → verses), Zefania XML, and OSIS XML up to 50 MB. Large files are automatically gzip-compressed before upload and verified with MFA.</div>
           </div>
-          <input type="file" hidden accept=".js,.json,.xml" onChange={(e) => { setFile(e.target.files?.[0] || null); setRep(null); setDraft(null); }} />
+          <input type="file" hidden accept=".js,.json,.xml" onChange={(e) => { setFile(e.target.files?.[0] || null); setRep(null); setDraft(null); setCompressNote(""); }} />
         </label>
 
         <div className="grid2">
           <div className="field"><label htmlFor="b-name">Translation name</label><input id="b-name" className="input" value={meta.name} placeholder="King James Version" onChange={(e) => setMeta({ ...meta, name: e.target.value })} /></div>
           <div className="field"><label htmlFor="b-code">Short code</label><input id="b-code" className="input" value={meta.code} placeholder="KJV" onChange={(e) => setMeta({ ...meta, code: e.target.value.toUpperCase() })} /></div>
           <div className="field"><label htmlFor="b-lang">Language</label><input id="b-lang" className="input" value={meta.language} onChange={(e) => setMeta({ ...meta, language: e.target.value })} /></div>
-          <div className="field"><label htmlFor="b-lic">License type</label><select id="b-lic" className="select" value={meta.license} onChange={(e) => setMeta({ ...meta, license: e.target.value })}><option>Public domain</option><option>Licensed</option><option>Other</option></select></div>
+          <div className="field"><label htmlFor="b-lic">License type</label><Select id="b-lic" ariaLabel="License type" value={meta.license} onChange={(v) => setMeta({ ...meta, license: v })} options={["Public domain", "Licensed", "Other"]} /></div>
         </div>
 
         <label className="check">
@@ -478,10 +524,10 @@ function BiblesTab() {
         </label>
 
         <div className="row wrap">
-          <button className="btn btn-secondary" disabled={!file || busy} onClick={() => runUpload("validate")}>
-            {busy ? "Validating…" : "1. Validate and preview"}
+          <button className="btn btn-secondary" disabled={!file || busy} onClick={() => requestUpload("validate")}>
+            {busy ? "Compressing & validating…" : "1. Validate and preview"}
           </button>
-          <button className="btn btn-secondary" disabled={!file || !rep?.ok || !meta.name || !meta.code || !meta.rights || busy} onClick={() => runUpload("draft")}>
+          <button className="btn btn-secondary" disabled={!file || !rep?.ok || !meta.name || !meta.code || !meta.rights || busy} onClick={() => requestUpload("draft")}>
             2. Save as Draft
           </button>
           <button className="btn btn-primary" disabled={!draft || busy} onClick={() => publish(draft.id)}>
@@ -500,7 +546,7 @@ function BiblesTab() {
           </div>
         )}
 
-        {err && <div className="banner bad"><Icon name="alertc" size={18} /><span className="grow">{err}</span>{file && <button className="btn btn-secondary btn-sm" onClick={() => runUpload("validate")}>Retry</button>}</div>}
+        {err && <div className="banner bad"><Icon name="alertc" size={18} /><span className="grow">{err}</span>{file && <button className="btn btn-secondary btn-sm" onClick={() => requestUpload("validate")}>Retry</button>}</div>}
 
         {rep && (
           <div className="col" style={{ gap: 12 }}>
@@ -552,6 +598,50 @@ function BiblesTab() {
             <div className="row between"><span className="muted">Pack URL</span><span className="mono" style={{ fontSize: 12 }}>{viewBible.url || "Not published"}</span></div>
             <div className="row between"><span className="muted">SHA-256</span><span className="mono" style={{ fontSize: 11 }}>{viewBible.sha256 ? viewBible.sha256.slice(0, 24) + "…" : "—"}</span></div>
           </div>
+        )}
+      </NativeModal>
+
+      <NativeModal open={!!mfaModal} onClose={() => { if (!busy) { setMfaModal(null); setMfaErr(""); } }} title="Confirm with MFA" titleId="mfa-bible-title">
+        {mfaModal && (
+          <form
+            className="col"
+            style={{ gap: 12 }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!mfaCode.trim()) {
+                setMfaErr("Enter your 6-digit Google Authenticator code or a recovery code.");
+                return;
+              }
+              runUpload(mfaModal.action, mfaCode);
+            }}
+          >
+            <p className="muted" style={{ margin: 0 }}>
+              {mfaModal.action === "draft"
+                ? `Enter your 6-digit Google Authenticator code to save ${file?.name || "this Bible file"} as a draft.`
+                : `This Bible file is ${(file ? (file.size / (1024 * 1024)).toFixed(2) : "0")} MB. Enter your 6-digit Google Authenticator code to compress and upload it.`}
+            </p>
+            <div className="field">
+              <label htmlFor="bible-mfa-code">Authenticator or recovery code</label>
+              <input
+                id="bible-mfa-code"
+                className="input mono"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                placeholder="123456"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+            {mfaErr && <div className="banner bad"><Icon name="alertc" size={18} /><span>{mfaErr}</span></div>}
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => { setMfaModal(null); setMfaErr(""); }}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={busy || !mfaCode.trim()}>
+                {busy ? "Compressing & uploading…" : "Verify & upload"}
+              </button>
+            </div>
+          </form>
         )}
       </NativeModal>
     </div>
@@ -1059,10 +1149,13 @@ function AuditTab() {
           <span className="muted" style={{ fontSize: 13 }}>Read-only record of every admin upload, publish, unpublish, delete, and role change.</span>
         </div>
         <div className="row wrap">
-          <select className="select" style={{ width: 200 }} value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} aria-label="Filter by action">
-            <option value="all">All actions</option>
-            {actions.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <Select
+            ariaLabel="Filter by action"
+            style={{ width: 200 }}
+            value={actionFilter}
+            onChange={setActionFilter}
+            options={[{ value: "all", label: "All actions" }, ...actions.map((a) => ({ value: a, label: a }))]}
+          />
           <input type="date" className="input" style={{ width: 170 }} value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} aria-label="Filter by date" />
           {(actionFilter !== "all" || dateFilter) && (
             <button className="btn btn-ghost btn-sm" onClick={() => { setActionFilter("all"); setDateFilter(""); }}>Clear</button>
@@ -1189,19 +1282,23 @@ function SettingsTab() {
         <div className="grid2">
           <div className="field">
             <label htmlFor="def-b">Default Bible version in Setup wizard</label>
-            <select id="def-b" className="select" value={form.defaultBibleId} onChange={(e) => setForm({ ...form, defaultBibleId: e.target.value })}>
-              {(data?.bibles || [{ id: "kjv", name: "King James Version", code: "KJV" }]).map((b) => (
-                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-              ))}
-            </select>
+            <Select
+              id="def-b"
+              ariaLabel="Default Bible version"
+              value={form.defaultBibleId}
+              onChange={(v) => setForm({ ...form, defaultBibleId: v })}
+              options={(data?.bibles || [{ id: "kjv", name: "King James Version", code: "KJV" }]).map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+            />
           </div>
           <div className="field">
             <label htmlFor="def-s">Starter song pack in Setup wizard</label>
-            <select id="def-s" className="select" value={form.starterSongPackId} onChange={(e) => setForm({ ...form, starterSongPackId: e.target.value })}>
-              {(data?.songPacks || [{ id: "starter-101", name: "Selah Live Song Library 101" }]).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            <Select
+              id="def-s"
+              ariaLabel="Starter song pack"
+              value={form.starterSongPackId}
+              onChange={(v) => setForm({ ...form, starterSongPackId: v })}
+              options={(data?.songPacks || [{ id: "starter-101", name: "Selah Live Song Library 101" }]).map((s) => ({ value: s.id, label: s.name }))}
+            />
           </div>
         </div>
         <div className="field">
@@ -1463,7 +1560,7 @@ export default function Admin() {
   const lastActivityRef = useRef(Date.now());
 
   const handleLogout = async (notice = "") => {
-    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    await fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).catch(() => { });
     currentCsrfToken = "";
     setLogoutNotice(typeof notice === "string" ? notice : "");
     setAdminUser(null);
@@ -1503,7 +1600,7 @@ export default function Admin() {
       lastActivityRef.current = now;
       if (now - lastPingAt > 2 * 60 * 1000) {
         lastPingAt = now;
-        fetch("/api/admin/auth/session", { credentials: "include", cache: "no-store" }).catch(() => {});
+        fetch("/api/admin/auth/session", { credentials: "include", cache: "no-store" }).catch(() => { });
       }
     };
 

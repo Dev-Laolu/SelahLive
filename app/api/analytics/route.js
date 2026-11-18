@@ -14,6 +14,6 @@ export async function POST(request) {
   if (!["install", "app_open", "visit", "download"].includes(event)) {
     return new Response(null, { status: 204 });
   }
-  await recordAnalyticsEvent({ event, uid, email, name, churchName, packId }).catch(() => {});
+  await recordAnalyticsEvent({ event, uid, email, name, churchName, packId }).catch(() => { });
   return new Response(null, { status: 204 });
 }
