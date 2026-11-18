@@ -1,0 +1,21 @@
+{
+  "name": "selah-live",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "firebase": "^11.0.0",
+    "idb": "^8.0.0",
+    "fflate": "^0.8.2",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "firebase-admin": "^13.0.0",
+    "@neondatabase/serverless": "^0.10.0"
+  }
+}

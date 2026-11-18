@@ -1,0 +1,233 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// Collection: users
+// Document ID: {uid} (matches Firebase Auth UID)
+// Fields:
+//   - name: string (required, 1..100 chars) - user display name
+//   - email: string (required, 3..254 chars, valid email format) - user email (PII)
+//   - churchName: string (optional, 0..150 chars) - church branding name
+//   - logoUrl: string (optional, 0..2048 chars, valid http/https URL if non-empty) - church logo URL
+//   - theme: string (optional, enum: 'dark' | 'light') - UI theme preference
+//   - pairId: string (optional, 0..64 chars) - OBS dock pairing identifier
+//   - createdAt: timestamp (required, immutable on update) - account creation timestamp
+//   - lastActiveAt: timestamp (required) - last active timestamp
+//
+// Collection: comments
+// Document ID: {commentId}
+// Fields:
+//   - uid: string (required, 1..128 chars, immutable, must match request.auth.uid) - author UID
+//   - targetType: string (required, immutable, enum: 'song' | 'pack' | 'translation') - feedback target type
+//   - targetId: string (required, 1..128 chars, immutable) - feedback target identifier
+//   - text: string (required, 1..2000 chars) - comment text content
+//   - createdAt: timestamp (required, immutable) - comment creation timestamp
+//
+// Collection: likes
+// Document ID: {likeId}
+// Fields:
+//   - uid: string (required, 1..128 chars, immutable, must match request.auth.uid) - author UID
+//   - targetType: string (required, immutable, enum: 'song' | 'pack' | 'translation') - liked target type
+//   - targetId: string (required, 1..128 chars, immutable) - liked target identifier
+//   - createdAt: timestamp (required, immutable) - like creation timestamp
+//
+// Collection: analytics_daily
+// Document ID: {dayId} (YYYY-MM-DD)
+// Fields:
+//   - installs: number - daily PWA install counter (server-written only)
+//   - visits: number - daily visit counter (server-written only)
+//   - activeUsers: number - daily active user counter (server-written only)
+//
+// Collection: analytics_events
+// Document ID: {eventId}
+// Fields:
+//   - event: string - raw event type ('install' | 'app_open' | 'ping') (server-written only)
+//   - createdAt: timestamp - event timestamp (server-written only)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the user has the admin custom claim (server-minted authority)
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // Check if user owns the resource (for path-scoped user documents)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if user is owner based on existing document's uid field
+    function isDocOwner() {
+      return isAuthenticated() &&
+        'uid' in resource.data &&
+        request.auth.uid == resource.data.uid;
+    }
+
+    // Verify UID matches authenticated user on create
+    function uidUnchanged() {
+      return 'uid' in request.resource.data &&
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    // Ensure uid field is not modified on update
+    function uidNotModified() {
+      return 'uid' in request.resource.data &&
+        'uid' in resource.data &&
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    // Validate required fields exist on the incoming document
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate that the document contains only the allowed fields (no schema pollution or privilege escalation)
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate that immutable fields have not been modified during an update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate required string field type and length bounds
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    // Validate optional string field (if present, must be string and within length bounds)
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= minLen &&
+         request.resource.data[field].size() <= maxLen);
+    }
+
+    // Validate URL format (must start with https:// or http://)
+    function isValidUrl(url) {
+      return url is string &&
+        url.size() <= 2048 &&
+        (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    // Validate email format and length
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() >= 3 &&
+        email.size() <= 254 &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators (Used in BOTH create and update)
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['name', 'email', 'createdAt', 'lastActiveAt']) &&
+        hasOnlyAllowedFields(['name', 'email', 'churchName', 'logoUrl', 'theme', 'pairId', 'createdAt', 'lastActiveAt']) &&
+        validStringLength('name', 1, 100) &&
+        isValidEmail(data.email) &&
+        isValidOptionalString('churchName', 0, 150) &&
+        isValidOptionalString('pairId', 0, 64) &&
+        (!('logoUrl' in data) || (data.logoUrl is string && (data.logoUrl.size() == 0 || isValidUrl(data.logoUrl)))) &&
+        (!('theme' in data) || (data.theme is string && data.theme in ['dark', 'light'])) &&
+        data.createdAt is timestamp &&
+        data.lastActiveAt is timestamp;
+    }
+
+    function isValidComment(data) {
+      return hasRequiredFields(['uid', 'targetType', 'targetId', 'text', 'createdAt']) &&
+        hasOnlyAllowedFields(['uid', 'targetType', 'targetId', 'text', 'createdAt']) &&
+        validStringLength('uid', 1, 128) &&
+        data.targetType is string &&
+        data.targetType in ['song', 'pack', 'translation'] &&
+        validStringLength('targetId', 1, 128) &&
+        validStringLength('text', 1, 2000) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidLike(data) {
+      return hasRequiredFields(['uid', 'targetType', 'targetId', 'createdAt']) &&
+        hasOnlyAllowedFields(['uid', 'targetType', 'targetId', 'createdAt']) &&
+        validStringLength('uid', 1, 128) &&
+        data.targetType is string &&
+        data.targetType in ['song', 'pack', 'translation'] &&
+        validStringLength('targetId', 1, 128) &&
+        data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Users collection: contains PII (email). Readable only by the owner or an admin.
+    // Writable only by the owner with strict schema validation and immutable createdAt.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if isOwner(uid) &&
+        isValidUser(request.resource.data) &&
+        areImmutableFieldsUnchanged(['createdAt']);
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // Comments collection: feedback on songs, packs, and translations.
+    match /comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        uidUnchanged() &&
+        isValidComment(request.resource.data);
+      allow update: if isDocOwner() &&
+        uidNotModified() &&
+        isValidComment(request.resource.data) &&
+        areImmutableFieldsUnchanged(['uid', 'targetType', 'targetId', 'createdAt']);
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // Likes collection: user likes on songs, packs, and translations.
+    match /likes/{likeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        uidUnchanged() &&
+        isValidLike(request.resource.data);
+      allow update: if false;
+      allow delete: if isDocOwner() || isAdmin();
+    }
+
+    // Daily aggregated analytics: written only by server (Admin SDK), readable only by admins.
+    match /analytics_daily/{dayId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Raw analytics events: written only by server (Admin SDK), readable only by admins.
+    match /analytics_events/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

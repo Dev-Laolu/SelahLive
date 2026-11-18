@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Maskable icon with 20% safe padding -->
+  <rect width="512" height="512" fill="#0B1020"/>
+  <circle cx="256" cy="184" r="92" fill="#E8B84A" fill-opacity="0.14"/>
+  <path d="M230 124v60M282 124v60" stroke="#E8B84A" stroke-width="22" stroke-linecap="round"/>
+  <path d="M256 228v156M256 228c-32-26-74-34-112-26v140c38-8 80 0 112 26 32-26 74-34 112-26V202c-38-8-80 0-112 26Z" stroke="#E8B84A" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+

@@ -1,0 +1,618 @@
+{
+  "id": "starter-101",
+  "type": "songpack",
+  "name": "Selah Live Song Library 101",
+  "version": "1.0.0",
+  "language": "English",
+  "license": "Public domain",
+  "songs": [
+    {
+      "id": "s1",
+      "title": "Amazing Grace",
+      "author": "John Newton",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Amazing grace how sweet the sound\nThat saved a wretch like me"
+        },
+        {
+          "label": "Verse 1",
+          "text": "I once was lost but now am found\nWas blind but now I see"
+        },
+        {
+          "label": "Verse 2",
+          "text": "'Twas grace that taught my heart to fear\nAnd grace my fears relieved"
+        },
+        {
+          "label": "Verse 2",
+          "text": "How precious did that grace appear\nThe hour I first believed"
+        },
+        {
+          "label": "Verse 3",
+          "text": "Through many dangers, toils and snares\nI have already come"
+        },
+        {
+          "label": "Verse 3",
+          "text": "'Tis grace hath brought me safe thus far\nAnd grace will lead me home"
+        },
+        {
+          "label": "Verse 4",
+          "text": "When we've been there ten thousand years\nBright shining as the sun"
+        },
+        {
+          "label": "Verse 4",
+          "text": "We've no less days to sing God's praise\nThan when we'd first begun"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "Holy, Holy, Holy",
+      "author": "Reginald Heber",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Holy, holy, holy! Lord God Almighty!\nEarly in the morning our song shall rise to Thee"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Holy, holy, holy! Merciful and mighty!\nGod in three Persons, blessed Trinity!"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Holy, holy, holy! All the saints adore Thee\nCasting down their golden crowns around the glassy sea"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Cherubim and seraphim falling down before Thee\nWhich wert, and art, and evermore shalt be"
+        },
+        {
+          "label": "Verse 3",
+          "text": "Holy, holy, holy! Though the darkness hide Thee\nThough the eye of sinful man Thy glory may not see"
+        },
+        {
+          "label": "Verse 3",
+          "text": "Only Thou art holy; there is none beside Thee\nPerfect in power, in love, and purity"
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "title": "It Is Well With My Soul",
+      "author": "Horatio Spafford",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "When peace like a river attendeth my way\nWhen sorrows like sea billows roll"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Whatever my lot, Thou hast taught me to say\nIt is well, it is well with my soul"
+        },
+        {
+          "label": "Chorus",
+          "text": "It is well (it is well)\nWith my soul (with my soul)"
+        },
+        {
+          "label": "Chorus",
+          "text": "It is well, it is well with my soul"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Though Satan should buffet, though trials should come\nLet this blest assurance control"
+        },
+        {
+          "label": "Verse 2",
+          "text": "That Christ hath regarded my helpless estate\nAnd hath shed His own blood for my soul"
+        },
+        {
+          "label": "Verse 3",
+          "text": "And Lord, haste the day when the faith shall be sight\nThe clouds be rolled back as a scroll"
+        },
+        {
+          "label": "Verse 3",
+          "text": "The trump shall resound, and the Lord shall descend\nEven so, it is well with my soul"
+        }
+      ]
+    },
+    {
+      "id": "s4",
+      "title": "Be Thou My Vision",
+      "author": "Ancient Irish Hymn (tr. Mary E. Byrne)",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Be Thou my Vision, O Lord of my heart\nNaught be all else to me, save that Thou art"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Thou my best Thought, by day or by night\nWaking or sleeping, Thy presence my light"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Be Thou my Wisdom, and Thou my true Word\nI ever with Thee and Thou with me, Lord"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Thou my great Father, I Thy true son\nThou in me dwelling, and I with Thee one"
+        },
+        {
+          "label": "Verse 3",
+          "text": "High King of Heaven, my victory won\nMay I reach Heaven's joys, O bright Heaven's Sun!"
+        },
+        {
+          "label": "Verse 3",
+          "text": "Heart of my own heart, whatever befall\nStill be my Vision, O Ruler of all"
+        }
+      ]
+    },
+    {
+      "id": "s5",
+      "title": "Come Thou Fount of Every Blessing",
+      "author": "Robert Robinson",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Come, Thou Fount of every blessing\nTune my heart to sing Thy grace"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Streams of mercy, never ceasing\nCall for songs of loudest praise"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Here I raise my Ebenezer\nHither by Thy help I'm come"
+        },
+        {
+          "label": "Verse 2",
+          "text": "And I hope, by Thy good pleasure\nSafely to arrive at home"
+        },
+        {
+          "label": "Verse 3",
+          "text": "O to grace how great a debtor\nDaily I'm constrained to be!"
+        },
+        {
+          "label": "Verse 3",
+          "text": "Let Thy goodness, like a fetter\nBind my wandering heart to Thee"
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "title": "Blessed Assurance",
+      "author": "Fanny Crosby",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Blessed assurance, Jesus is mine!\nO what a foretaste of glory divine!"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Heir of salvation, purchase of God\nBorn of His Spirit, washed in His blood"
+        },
+        {
+          "label": "Chorus",
+          "text": "This is my story, this is my song\nPraising my Savior all the day long"
+        },
+        {
+          "label": "Chorus",
+          "text": "This is my story, this is my song\nPraising my Savior all the day long"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Perfect submission, all is at rest\nI in my Savior am happy and blest"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Watching and waiting, looking above\nFilled with His goodness, lost in His love"
+        }
+      ]
+    },
+    {
+      "id": "s7",
+      "title": "Rock of Ages",
+      "author": "Augustus Toplady",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Rock of Ages, cleft for me\nLet me hide myself in Thee"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Let the water and the blood\nFrom Thy wounded side which flowed"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Be of sin the double cure\nSave from wrath and make me pure"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Nothing in my hand I bring\nSimply to Thy cross I cling"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Naked, come to Thee for dress\nHelpless, look to Thee for grace"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Foul, I to the fountain fly\nWash me, Savior, or I die"
+        }
+      ]
+    },
+    {
+      "id": "s8",
+      "title": "All Hail the Power of Jesus' Name",
+      "author": "Edward Perronet",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "All hail the power of Jesus' name!\nLet angels prostrate fall"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Bring forth the royal diadem\nAnd crown Him Lord of all"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Let every kindred, every tribe\nOn this terrestrial ball"
+        },
+        {
+          "label": "Verse 2",
+          "text": "To Him all majesty ascribe\nAnd crown Him Lord of all"
+        },
+        {
+          "label": "Verse 3",
+          "text": "O that with yonder sacred throng\nWe at His feet may fall!"
+        },
+        {
+          "label": "Verse 3",
+          "text": "We'll join the everlasting song\nAnd crown Him Lord of all"
+        }
+      ]
+    },
+    {
+      "id": "s9",
+      "title": "Crown Him With Many Crowns",
+      "author": "Matthew Bridges",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Crown Him with many crowns\nThe Lamb upon His throne"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Hark! how the heavenly anthem drowns\nAll music but its own"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Awake, my soul, and sing\nOf Him who died for thee"
+        },
+        {
+          "label": "Verse 2",
+          "text": "And hail Him as thy matchless King\nThrough all eternity"
+        }
+      ]
+    },
+    {
+      "id": "s10",
+      "title": "Fairest Lord Jesus",
+      "author": "Münster Gesangbuch (tr. Joseph A. Seiss)",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Fairest Lord Jesus, Ruler of all nature\nO Thou of God and man the Son"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Thee will I cherish, Thee will I honor\nThou, my soul's glory, joy, and crown"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Fair are the meadows, fairer still the woodlands\nRobed in the blooming garb of spring"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Jesus is fairer, Jesus is purer\nWho makes the woeful heart to sing"
+        }
+      ]
+    },
+    {
+      "id": "s11",
+      "title": "Joy to the World",
+      "author": "Isaac Watts",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Joy to the world, the Lord is come!\nLet earth receive her King"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Let every heart prepare Him room\nAnd heaven and nature sing"
+        },
+        {
+          "label": "Verse 2",
+          "text": "He rules the world with truth and grace\nAnd makes the nations prove"
+        },
+        {
+          "label": "Verse 2",
+          "text": "The glories of His righteousness\nAnd wonders of His love"
+        }
+      ]
+    },
+    {
+      "id": "s12",
+      "title": "Love Divine, All Loves Excelling",
+      "author": "Charles Wesley",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Love divine, all loves excelling\nJoy of heaven, to earth come down"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Fix in us Thy humble dwelling\nAll Thy faithful mercies crown"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Finish, then, Thy new creation\nPure and spotless let us be"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Let us see Thy great salvation\nPerfectly restored in Thee"
+        }
+      ]
+    },
+    {
+      "id": "s13",
+      "title": "Nearer, My God, to Thee",
+      "author": "Sarah Flower Adams",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Nearer, my God, to Thee, nearer to Thee!\nE'en though it be a cross that raiseth me"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Still all my song shall be\nNearer, my God, to Thee, nearer to Thee!"
+        },
+        {
+          "label": "Verse 2",
+          "text": "There let the way appear, steps unto heaven\nAll that Thou sendest me, in mercy given"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Angels to beckon me\nNearer, my God, to Thee, nearer to Thee!"
+        }
+      ]
+    },
+    {
+      "id": "s14",
+      "title": "O For a Thousand Tongues to Sing",
+      "author": "Charles Wesley",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "O for a thousand tongues to sing\nMy great Redeemer's praise"
+        },
+        {
+          "label": "Verse 1",
+          "text": "The glories of my God and King\nThe triumphs of His grace!"
+        },
+        {
+          "label": "Verse 2",
+          "text": "My gracious Master and my God\nAssist me to proclaim"
+        },
+        {
+          "label": "Verse 2",
+          "text": "To spread through all the earth abroad\nThe honors of Thy name"
+        }
+      ]
+    },
+    {
+      "id": "s15",
+      "title": "Praise to the Lord, the Almighty",
+      "author": "Joachim Neander (tr. Catherine Winkworth)",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Praise to the Lord, the Almighty, the King of creation!\nO my soul, praise Him, for He is thy health and salvation!"
+        },
+        {
+          "label": "Verse 1",
+          "text": "All ye who hear, now to His temple draw near\nJoin me in glad adoration!"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Praise to the Lord, who o'er all things so wondrously reigneth\nShelters thee under His wings, yea, so gently sustaineth"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Hast thou not seen how thy desires e'er have been\nGranted in what He ordaineth?"
+        }
+      ]
+    },
+    {
+      "id": "s16",
+      "title": "Take My Life and Let It Be",
+      "author": "Frances Ridley Havergal",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Take my life and let it be\nConsecrated, Lord, to Thee"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Take my moments and my days\nLet them flow in ceaseless praise"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Take my silver and my gold\nNot a mite would I withhold"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Take my intellect and use\nEvery power as Thou shalt choose"
+        }
+      ]
+    },
+    {
+      "id": "s17",
+      "title": "The Church's One Foundation",
+      "author": "Samuel John Stone",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "The Church's one foundation\nIs Jesus Christ her Lord"
+        },
+        {
+          "label": "Verse 1",
+          "text": "She is His new creation\nBy water and the Word"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Elect from every nation\nYet one o'er all the earth"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Her charter of salvation\nOne Lord, one faith, one birth"
+        }
+      ]
+    },
+    {
+      "id": "s18",
+      "title": "A Mighty Fortress Is Our God",
+      "author": "Martin Luther (tr. Frederick H. Hedge)",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "A mighty fortress is our God\nA bulwark never failing"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Our helper He, amid the flood\nOf mortal ills prevailing"
+        },
+        {
+          "label": "Verse 2",
+          "text": "That word above all earthly powers\nNo thanks to them, abideth"
+        },
+        {
+          "label": "Verse 2",
+          "text": "The Spirit and the gifts are ours\nThrough Him who with us sideth"
+        }
+      ]
+    },
+    {
+      "id": "s19",
+      "title": "What a Friend We Have in Jesus",
+      "author": "Joseph M. Scriven",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "What a Friend we have in Jesus\nAll our sins and griefs to bear!"
+        },
+        {
+          "label": "Verse 1",
+          "text": "What a privilege to carry\nEverything to God in prayer!"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Have we trials and temptations?\nIs there trouble anywhere?"
+        },
+        {
+          "label": "Verse 2",
+          "text": "We should never be discouraged\nTake it to the Lord in prayer"
+        }
+      ]
+    },
+    {
+      "id": "s20",
+      "title": "When I Survey the Wondrous Cross",
+      "author": "Isaac Watts",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "When I survey the wondrous cross\nOn which the Prince of glory died"
+        },
+        {
+          "label": "Verse 1",
+          "text": "My richest gain I count but loss\nAnd pour contempt on all my pride"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Were the whole realm of nature mine\nThat were a present far too small"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Love so amazing, so divine\nDemands my soul, my life, my all"
+        }
+      ]
+    },
+    {
+      "id": "s21",
+      "title": "Christ the Lord Is Risen Today",
+      "author": "Charles Wesley",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Christ the Lord is risen today, Alleluia!\nSons of men and angels say, Alleluia!"
+        },
+        {
+          "label": "Verse 1",
+          "text": "Raise your joys and triumphs high, Alleluia!\nSing, ye heavens, and earth reply, Alleluia!"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Lives again our glorious King, Alleluia!\nWhere, O death, is now thy sting? Alleluia!"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Once He died our souls to save, Alleluia!\nWhere's thy victory, boasting grave? Alleluia!"
+        }
+      ]
+    },
+    {
+      "id": "s22",
+      "title": "Abide With Me",
+      "author": "Henry Francis Lyte",
+      "language": "English",
+      "sections": [
+        {
+          "label": "Verse 1",
+          "text": "Abide with me; fast falls the eventide\nThe darkness deepens; Lord, with me abide!"
+        },
+        {
+          "label": "Verse 1",
+          "text": "When other helpers fail and comforts flee\nHelp of the helpless, O abide with me"
+        },
+        {
+          "label": "Verse 2",
+          "text": "I need Thy presence every passing hour\nWhat but Thy grace can foil the tempter's power?"
+        },
+        {
+          "label": "Verse 2",
+          "text": "Who, like Thyself, my guide and stay can be?\nThrough cloud and sunshine, Lord, abide with me"
+        }
+      ]
+    }
+  ]
+}

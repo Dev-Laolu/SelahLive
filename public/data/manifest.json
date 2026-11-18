@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "defaultBibleId": "kjv",
+  "starterSongPackId": "starter-101",
+  "announcement": "",
+  "packs": [
+    {
+      "id": "kjv",
+      "type": "bible",
+      "code": "KJV",
+      "name": "King James Version",
+      "language": "English",
+      "license": "Public domain",
+      "version": "1.0.0",
+      "sizeBytes": 1219476,
+      "sha256": "87a72b195687fd96a90af3a94f4cf2e1559a29ee48f0dff8426f82855f4001c4",
+      "url": "/data/kjv-sample.json.gz",
+      "notes": "Full 66-book King James Version (31,102 verses)."
+    },
+    {
+      "id": "starter-101",
+      "type": "songpack",
+      "name": "Selah Live Song Library 101",
+      "language": "English",
+      "license": "Public domain",
+      "version": "1.0.0",
+      "songCount": 22,
+      "sizeBytes": 4584,
+      "sha256": "9c4558d23d203270347086034ad143eef4fd3fc8445677ee8bec710ace3bddf9",
+      "url": "/data/songs-sample.json.gz",
+      "notes": "Starter song pack (22 hymns, 2 lines per slide)."
+    }
+  ]
+}

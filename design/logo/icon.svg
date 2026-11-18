@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#0B1020"/>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="35%" r="36%">
+      <stop offset="0%" stop-color="#FFE49E" stop-opacity="0.85"/>
+      <stop offset="45%" stop-color="#E8B84A" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#E8B84A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="80" y1="40" x2="432" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFE08A"/>
+      <stop offset="50%" stop-color="#E8B84A"/>
+      <stop offset="100%" stop-color="#C99224"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="168" r="130" fill="url(#glow)"/>
+  <g fill="url(#goldGrad)">
+    <path d="M236 190 L124 94 L248 180 Z"/>
+    <path d="M244 186 L186 52 L256 178 Z"/>
+    <path d="M247 186 L256 28 L265 186 Z"/>
+    <path d="M256 178 L326 52 L268 186 Z"/>
+    <path d="M264 180 L388 94 L276 190 Z"/>
+  </g>
+  <circle cx="256" cy="176" r="16" fill="#FFFDF5"/>
+  <path d="M256 226 C204 176 138 168 84 176 C72 178 64 188 64 200 L60 356 C60 368 70 378 82 378 C144 379 204 392 256 426 C308 392 368 379 430 378 C442 378 452 368 452 356 L448 200 C448 188 440 178 428 176 C374 168 308 176 256 226 Z" stroke="url(#goldGrad)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="200" y="242" width="42" height="104" rx="21" fill="url(#goldGrad)"/>
+  <rect x="270" y="242" width="42" height="104" rx="21" fill="url(#goldGrad)"/>
+</svg>
