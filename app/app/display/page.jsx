@@ -79,7 +79,11 @@ export default function DisplayPage() {
   useEffect(() => {
     const el = stageWrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setStageScale(Math.max(0.15, el.clientWidth / 1920)));
+    const update = () => {
+      if (el.clientWidth > 0) setStageScale(Math.max(0.15, el.clientWidth / 1920));
+    };
+    update();
+    const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, [view]);
@@ -581,8 +585,26 @@ export default function DisplayPage() {
               </div>
             </div>
 
-            {/* Interactive 16:9 Canvas Preview */}
-            <div className="card" style={{ padding: 10 }}>
+            {/* Interactive 16:9 Canvas Preview with Professional Broadcast Grid & Snap Tools */}
+            <div className="card col" style={{ padding: 10, gap: 8 }}>
+              <div className="row between wrap" style={{ gap: 8, fontSize: 12 }}>
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <span className="chip mono" style={{ fontSize: 11 }}>1920 × 1080</span>
+                  {editMode === "lowerThird" && (
+                    <span className="muted mono" style={{ fontSize: 11 }}>
+                      X:{layout.x} · Bottom:{layout.bottom} · {layout.width}×{layout.height}
+                    </span>
+                  )}
+                </div>
+                {editMode === "lowerThird" && (
+                  <div className="row wrap" style={{ gap: 4 }}>
+                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "left", x: 60 })}>Snap Left</button>
+                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "center", x: Math.round((1920 - layout.width) / 2) })}>Snap Center</button>
+                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "right", x: 1920 - 60 - layout.width })}>Snap Right</button>
+                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "center", x: 160, bottom: 80, width: 1600, height: 220 })}>Reset box</button>
+                  </div>
+                )}
+              </div>
               <div className="preview-box" ref={stageWrapRef} style={{ position: "relative" }}>
                 <div className="preview-stage" style={{ transform: `scale(${stageScale})` }}>
                   <OverlayStage
@@ -598,7 +620,9 @@ export default function DisplayPage() {
                 </div>
                 {showGuides && (
                   <>
+                    <div className="canvas-grid" />
                     <div className="canvas-guide-safe" />
+                    <div className="canvas-guide-title" />
                     <div className="canvas-guide-cx" />
                     <div className="canvas-guide-cy" />
                   </>
