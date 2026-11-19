@@ -23,11 +23,12 @@ export async function POST(request) {
     if (action === "unpublish") return Response.json({ pack: await unpublishSongPack(a, id) });
     if (action === "delete") return Response.json({ deleted: await deleteSongPack(a, id) });
     if (action === "draft") {
-      const rep = validateSongs(songs || [], parseSong);
+      const minSongs = Math.max(5, Number(meta?.packSize || body.minSongs) || 5);
+      const rep = validateSongs(songs || [], minSongs);
       if (!rep.ok) {
         return Response.json({ error: rep.errors[0] || rep.problems[0]?.msg || "Validation failed.", report: rep }, { status: 400 });
       }
-      const draft = await saveSongPackDraft(a, meta || {}, rep.songs);
+      const draft = await saveSongPackDraft(a, { ...(meta || {}), packSize: minSongs }, rep.songs);
       return Response.json({ draft, report: rep });
     }
     return Response.json({ error: "Unknown action." }, { status: 400 });

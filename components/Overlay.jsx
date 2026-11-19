@@ -282,8 +282,8 @@ function DividerLine({ divider }) {
     divider.lengthMode === "full"
       ? "100%"
       : divider.lengthMode === "px"
-      ? `${divider.lengthValue}px`
-      : `${Math.min(100, divider.lengthValue || 35)}%`;
+        ? `${divider.lengthValue}px`
+        : `${Math.min(100, divider.lengthValue || 35)}%`;
   const alignSelf = divider.align === "center" ? "center" : divider.align === "right" ? "flex-end" : "flex-start";
   const isGrad = divider.style === "gradient";
 
@@ -410,15 +410,15 @@ export function OverlayStage({
   const refBoxCss =
     rb.style === "pill"
       ? {
-          display: "inline-flex",
-          alignItems: "center",
-          border: `${rb.borderWidth ?? 1.5}px solid ${rb.borderColor || "#E8B84A"}`,
-          borderRadius: 999,
-          padding: `${rb.paddingY ?? 4}px ${rb.paddingX ?? 14}px`,
-          background: rb.bgColor || "transparent",
-        }
+        display: "inline-flex",
+        alignItems: "center",
+        border: `${rb.borderWidth ?? 1.5}px solid ${rb.borderColor || "#E8B84A"}`,
+        borderRadius: 999,
+        padding: `${rb.paddingY ?? 4}px ${rb.paddingX ?? 14}px`,
+        background: rb.bgColor || "transparent",
+      }
       : rb.style === "rect"
-      ? {
+        ? {
           display: "inline-flex",
           alignItems: "center",
           border: `${rb.borderWidth ?? 1.5}px solid ${rb.borderColor || "#E8B84A"}`,
@@ -426,14 +426,14 @@ export function OverlayStage({
           padding: `${rb.paddingY ?? 4}px ${rb.paddingX ?? 12}px`,
           background: rb.bgColor || "transparent",
         }
-      : rb.style === "underline"
-      ? {
-          display: "inline-flex",
-          alignItems: "center",
-          borderBottom: `${rb.borderWidth ?? 2}px solid ${rb.borderColor || "#E8B84A"}`,
-          paddingBottom: rb.paddingY ?? 4,
-        }
-      : { display: "inline-flex", alignItems: "center" };
+        : rb.style === "underline"
+          ? {
+            display: "inline-flex",
+            alignItems: "center",
+            borderBottom: `${rb.borderWidth ?? 2}px solid ${rb.borderColor || "#E8B84A"}`,
+            paddingBottom: rb.paddingY ?? 4,
+          }
+          : { display: "inline-flex", alignItems: "center" };
 
   const refAlignJustify =
     els.reference.align === "center" ? "center" : els.reference.align === "right" ? "flex-end" : "flex-start";
@@ -499,10 +499,10 @@ export function OverlayStage({
       els.logo.position === "top-right"
         ? { right: 48, top: 40 }
         : els.logo.position === "bottom-left"
-        ? { left: 48, bottom: 40 }
-        : els.logo.position === "bottom-right"
-        ? { right: 48, bottom: 40 }
-        : { left: els.logo.x ?? 48, top: els.logo.y ?? 40 };
+          ? { left: 48, bottom: 40 }
+          : els.logo.position === "bottom-right"
+            ? { right: 48, bottom: 40 }
+            : { left: els.logo.x ?? 48, top: els.logo.y ?? 40 };
 
     return (
       <div
@@ -634,10 +634,10 @@ export function OverlayStage({
     cfg.hpos === "custom"
       ? { left: cfg.x ?? 160 }
       : cfg.hpos === "left"
-      ? { left: 60 }
-      : cfg.hpos === "right"
-      ? { right: 60 }
-      : { left: (1920 - w) / 2 };
+        ? { left: 60 }
+        : cfg.hpos === "right"
+          ? { right: 60 }
+          : { left: (1920 - w) / 2 };
 
   const showBrandCol = els.logo.visible || (els.churchName.visible && !!style.churchName);
   const keepSpace = cfg.layoutFlow === "keep-space";

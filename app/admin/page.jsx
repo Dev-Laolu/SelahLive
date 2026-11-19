@@ -661,11 +661,14 @@ function SongsTab() {
   const [meta, setMeta] = useState({
     name: "Selah Live Song Library 102",
     language: "English",
+    packSize: 10,
     rights: false,
     notes: "",
     notificationText: "New song pack: Selah Live Song Library 102 is ready to download.",
     notify: true,
   });
+
+  const minRequired = Math.max(5, Number(meta.packSize) || 5);
 
   const load = () => {
     authFetch("/api/admin/songs").then((r) => {
@@ -687,6 +690,7 @@ function SongsTab() {
     try {
       const fd = new FormData();
       files.forEach((f) => fd.append("files", f));
+      fd.append("minSongs", String(minRequired));
       const res = await authFetch("/api/admin/songs/upload", { method: "POST", body: fd });
       setRep(res);
       setSongs(res.songs || []);
@@ -696,7 +700,7 @@ function SongsTab() {
     setBusy(false);
   };
 
-  // Recompute validation locally whenever admin edits a title inline or removes a song
+  // Recompute validation locally whenever admin edits a title inline, changes pack size, or removes a song
   const liveValidation = useMemo(() => {
     if (!songs.length && !rep) return null;
     const seen = new Set();
@@ -710,9 +714,9 @@ function SongsTab() {
       if (k) seen.add(k);
     });
     const errors = [];
-    if (songs.length < 20) errors.push(`Minimum 20 songs required per pack (currently ${songs.length}).`);
+    if (songs.length < minRequired) errors.push(`This pack has ${songs.length} song${songs.length === 1 ? "" : "s"}. Add at least ${minRequired - songs.length} more (minimum ${minRequired}).`);
     return { ok: errors.length === 0 && problems.length === 0, errors, problems };
-  }, [songs, rep]);
+  }, [songs, rep, minRequired]);
 
   const saveDraft = async () => {
     setBusy(true); setErr("");
@@ -813,7 +817,7 @@ function SongsTab() {
 
       <div className="card col" style={{ gap: 16 }}>
         <div className="row between wrap" style={{ gap: 10 }}>
-          <h3 style={{ margin: 0 }}>Upload song pack (minimum 20 songs)</h3>
+          <h3 style={{ margin: 0 }}>Upload song pack (minimum {minRequired} songs)</h3>
           <a
             href="/templates/selah-live-song-pack-template.txt"
             download="selah-live-song-pack-template.txt"
@@ -827,7 +831,7 @@ function SongsTab() {
           <div>
             <Icon name="upload" size={28} className="gold" />
             <div style={{ marginTop: 6 }}><b>{files.length ? `${files.length} file(s) selected: ${files.map((f) => f.name).join(", ")}` : "Drop multiple .txt files, a .zip of .txt files, or a combined .txt (separated by === SONG ===)"}</b></div>
-            <div className="muted" style={{ fontSize: 12 }}>Minimum 20 songs per pack. UTF-8 only. Max 10 MB per file.</div>
+            <div className="muted" style={{ fontSize: 12 }}>Select pack size below (minimum 5 songs). UTF-8 only. Max 10 MB per file.</div>
           </div>
           <input type="file" hidden multiple accept=".txt,.zip" onChange={(e) => { setFiles([...(e.target.files || [])]); setRep(null); setDraft(null); }} />
         </label>
@@ -841,7 +845,7 @@ function SongsTab() {
               <li>Headers at the top of each song: <code>Title:</code> (required), <code>Author:</code>, <code>Language:</code> (default English), <code>CCLI:</code>.</li>
               <li>Leave a blank line after headers, then add lyrics. Optional section labels go in brackets: <code>[Verse 1]</code>, <code>[Chorus]</code>, <code>[Bridge]</code>.</li>
               <li><b>A blank line separates slides.</b> Lines within a slide stay together.</li>
-              <li>UTF-8 only · Max 40 lines/slide · Max 200 slides/song · Warn above 120 chars/line · Minimum <b>20 songs</b> to publish.</li>
+              <li>UTF-8 only · Max 40 lines/slide · Max 200 slides/song · Warn above 120 chars/line · Minimum <b>5 songs</b> (selectable pack size: 5, 10, 20, or 50+).</li>
             </ul>
             <pre className="mono" style={{ margin: 0, padding: 10, borderRadius: 8, background: "var(--bg)", fontSize: 12, overflowX: "auto" }}>{`=== SONG ===
 Title: Amazing Grace
@@ -857,9 +861,24 @@ Was blind, but now I see`}</pre>
           </div>
         </details>
 
-        <div className="grid2">
+        <div className="grid3">
           <div className="field"><label htmlFor="sp-name">Pack name</label><input id="sp-name" className="input" value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value, notificationText: `New song pack: ${e.target.value} is ready to download.` })} /></div>
           <div className="field"><label htmlFor="sp-lang">Language</label><input id="sp-lang" className="input" value={meta.language} onChange={(e) => setMeta({ ...meta, language: e.target.value })} /></div>
+          <div className="field">
+            <label htmlFor="sp-size">Pack size (minimum songs)</label>
+            <Select
+              id="sp-size"
+              ariaLabel="Song pack size"
+              value={String(meta.packSize)}
+              onChange={(v) => setMeta({ ...meta, packSize: Number(v) })}
+              options={[
+                { value: "5", label: "Mini Pack (5+ songs)" },
+                { value: "10", label: "Standard Pack (10+ songs)" },
+                { value: "20", label: "Full Pack (20+ songs)" },
+                { value: "50", label: "Mega Pack (50+ songs)" },
+              ]}
+            />
+          </div>
         </div>
 
         <label className="check">
@@ -874,7 +893,7 @@ Was blind, but now I see`}</pre>
           <button className="btn btn-secondary" disabled={!liveValidation?.ok || !meta.rights || busy} onClick={saveDraft}>
             2. Save as Draft ({songs.length} songs)
           </button>
-          <button className="btn btn-primary" disabled={!draft || songs.length < 20 || busy} onClick={() => publish(draft.id)}>
+          <button className="btn btn-primary" disabled={!draft || songs.length < minRequired || busy} onClick={() => publish(draft.id)}>
             <Icon name="send" size={16} />3. Publish song pack
           </button>
           <label className="check" style={{ marginLeft: 8 }}>
@@ -887,10 +906,10 @@ Was blind, but now I see`}</pre>
 
         {(liveValidation || rep) && (
           <div className="col" style={{ gap: 8 }}>
-            {songs.length < 20 && rep && (
+            {songs.length < minRequired && rep && (
               <div className="banner bad">
                 <Icon name="alertc" size={18} />
-                <span>This pack has {songs.length} song{songs.length === 1 ? "" : "s"}. Add at least {20 - songs.length} more.</span>
+                <span>This pack has {songs.length} song{songs.length === 1 ? "" : "s"}. Add at least {minRequired - songs.length} more (minimum {minRequired}).</span>
               </div>
             )}
             {(rep?.errors || []).filter((e) => !e.startsWith("This pack has ")).map((e, i) => (
@@ -900,8 +919,8 @@ Was blind, but now I see`}</pre>
               <div key={`warn-${i}`} className="banner warn"><Icon name="alert" size={18} /><span>{w}</span></div>
             ))}
             {liveValidation?.problems?.map((p, i) => <div key={`lp-${i}`} className="banner warn"><Icon name="alert" size={18} />{p}</div>)}
-            {liveValidation?.ok && rep?.ok && (
-              <div className="banner ok"><Icon name="checkc" size={18} />{songs.length} songs validated (minimum 20 met). Ready to save draft and publish.</div>
+            {liveValidation?.ok && (rep?.errors || []).filter((e) => !e.startsWith("This pack has ")).length === 0 && (
+              <div className="banner ok"><Icon name="checkc" size={18} />{songs.length} songs validated (minimum {minRequired} met). Ready to save draft and publish.</div>
             )}
           </div>
         )}
@@ -910,7 +929,7 @@ Was blind, but now I see`}</pre>
           <div className="card raised col" style={{ gap: 10 }}>
             <div className="row between">
               <b>Detected songs ({songs.length}) — edit titles inline or remove songs before publishing</b>
-              <span className="chip">{songs.length} / 20 min</span>
+              <span className="chip">{songs.length} / {minRequired} min</span>
             </div>
             <div style={{ maxHeight: 320, overflow: "auto" }} className="col">
               {songs.map((s, idx) => (

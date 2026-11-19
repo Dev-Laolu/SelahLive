@@ -52,7 +52,13 @@ export default function LibraryPage() {
           return (
             <div key={e.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="libwide">
-                <div><b>{e.name}</b><div className="muted" style={{ fontSize: 12 }}>{e.language}</div></div>
+                <div>
+                  <b>{e.name}</b>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {e.language}
+                    {e.type === "songpack" && e.songCount ? ` · ${e.songCount} songs` : ""}
+                  </div>
+                </div>
                 <span className="muted mono">{e.sizeBytes ? kb(e.sizeBytes) : "—"}</span>
                 <span className="muted mono">v{have ? have.version : e.version}</span>
                 <span className={`chip ${status === "ok" ? "ok" : status === "update" ? "warn" : ""}`}>{status === "ok" ? "Downloaded" : status === "update" ? "Update available" : "Not downloaded"}</span>

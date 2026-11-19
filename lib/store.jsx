@@ -239,12 +239,12 @@ export function AppProvider({ children }) {
             name: sess?.name,
             churchName: mergedStyle.churchName,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
     })();
     const on = () => setOnline(true), off = () => setOnline(false);
     window.addEventListener("online", on); window.addEventListener("offline", off);
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => { });
     bc.current = "BroadcastChannel" in window ? new BroadcastChannel("selah-live") : null;
     return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
@@ -266,9 +266,9 @@ export function AppProvider({ children }) {
     const seq = ++seqRef.current;
     const pairId = obsConfRef.current.pairId;
     const msg = { app: "selah-live", v: 1, pairId, type, seq, ...payload };
-    try { bc.current && bc.current.postMessage(msg); } catch {}
+    try { bc.current && bc.current.postMessage(msg); } catch { }
     if (obs.current && obs.current.connected) {
-      obs.current.send(type, pairId, { seq, ...payload }).catch(() => {});
+      obs.current.send(type, pairId, { seq, ...payload }).catch(() => { });
     }
     return seq;
   }, []);
@@ -874,7 +874,7 @@ export function AppProvider({ children }) {
     const unsubObs = obs.current ? obs.current.on((ev) => {
       if (ev.type === "closed") { setObsStatus("disconnected"); return; }
       if (ev.type === "event" && ev.name === "CustomEvent") handleIncoming(ev.data);
-    }) : () => {};
+    }) : () => { };
 
     if (bc.current) bc.current.onmessage = (e) => handleIncoming(e.data);
     return () => { unsubObs(); };
@@ -906,7 +906,7 @@ export function AppProvider({ children }) {
       if (!res.ok) throw new Error("download");
       const total = +res.headers.get("content-length") || entry.sizeBytes || 1;
       const reader = res.body.getReader(); const chunks = []; let got = 0;
-      for (;;) {
+      for (; ;) {
         const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
@@ -955,7 +955,7 @@ export function AppProvider({ children }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ event: "download", packId: entry.id }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       return true;
     } catch {

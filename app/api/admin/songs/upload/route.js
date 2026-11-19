@@ -42,6 +42,7 @@ export async function POST(request) {
       files.push({ name: f.name, text: await f.text() });
     }
   }
+  const minSongs = Math.max(5, Number(form.get("minSongs")) || 5);
   if (!files.length) return Response.json({ error: "No .txt or .zip files uploaded." }, { status: 400 });
-  return Response.json(parseSongPackFiles(files));
+  return Response.json(parseSongPackFiles(files, minSongs));
 }
