@@ -1,0 +1,74 @@
+# ==============================================================================
+# Selah Live — Song Pack Template (UTF-8)
+# ==============================================================================
+# FORMAT RULES:
+# 1. Separate each song with a line containing exactly:  === SONG ===
+# 2. Lines starting with # are comments and are ignored.
+# 3. Each song starts with header lines:
+#      Title: (required)
+#      Author: (optional)
+#      Language: (optional, default: English)
+#      CCLI: (optional)
+# 4. Leave ONE blank line after the headers, then write the lyrics.
+# 5. Optional section labels go on their own line in brackets: [Verse 1], [Chorus], [Bridge], [Tag]
+# 6. A blank line separates slides (each slide = one projection screen).
+# 7. A published song pack must contain at least 20 songs.
+# ==============================================================================
+
+=== SONG ===
+Title: Amazing Grace
+Author: John Newton
+Language: English
+CCLI:
+
+[Verse 1]
+Amazing grace, how sweet the sound
+That saved a wretch like me
+
+I once was lost, but now am found
+Was blind, but now I see
+
+[Verse 2]
+'Twas grace that taught my heart to fear
+And grace my fears relieved
+
+How precious did that grace appear
+The hour I first believed
+
+=== SONG ===
+Title: Great Is Thy Faithfulness
+Author: Thomas O. Chisholm
+Language: English
+CCLI:
+
+[Verse 1]
+Great is Thy faithfulness, O God my Father
+There is no shadow of turning with Thee
+
+Thou changest not, Thy compassions, they fail not
+As Thou hast been Thou forever wilt be
+
+[Chorus]
+Great is Thy faithfulness!
+Great is Thy faithfulness!
+
+Morning by morning new mercies I see
+All I have needed Thy hand hath provided
+Great is Thy faithfulness, Lord, unto me!
+
+=== SONG ===
+Title: Replace With Song 3 Title
+Author: Author Name
+Language: English
+CCLI:
+
+[Verse 1]
+First line of slide one
+Second line of slide one
+
+First line of slide two
+Second line of slide two
+
+[Chorus]
+Chorus slide line one
+Chorus slide line two

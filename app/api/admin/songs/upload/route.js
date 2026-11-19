@@ -1,6 +1,5 @@
 import { requireAdmin, rateLimit } from "@/lib/server/admin";
-import { splitSongs, validateSongs } from "@/lib/server/parsers";
-import { parseSong } from "@/lib/songs";
+import { parseSongPackFiles } from "@/lib/songs";
 import { unzipSync, strFromU8 } from "fflate";
 
 export const runtime = "nodejs";
@@ -44,5 +43,5 @@ export async function POST(request) {
     }
   }
   if (!files.length) return Response.json({ error: "No .txt or .zip files uploaded." }, { status: 400 });
-  return Response.json(validateSongs(splitSongs(files), parseSong));
+  return Response.json(parseSongPackFiles(files));
 }

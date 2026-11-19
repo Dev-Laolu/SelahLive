@@ -172,6 +172,7 @@ export default function Overlay() {
     };
   }, []);
 
+  const prefersReduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   if (!visible || !item) return <div style={{ width: 1920, height: 1080 }} />;
   return (
     <div style={{ position: "relative", width: 1920, height: 1080, overflow: "hidden" }} className={out ? "ov-out-wrap" : ""}>
@@ -183,6 +184,9 @@ export default function Overlay() {
           assetsMap={assetsMap}
           enterKey={enterKey}
           contentKey={contentKey}
+          paused={!visible || out}
+          performanceMode={!!style.performanceMode}
+          reduceMotion={!!(style.reduceMotion || prefersReduced)}
         />
       </div>
     </div>

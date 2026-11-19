@@ -113,6 +113,7 @@ function AddSongModal({ open, onClose, onSave, maxLines = 2 }) {
 export default function SongsPage() {
   const {
     songPacks, customSongs, addCustomSong, favSongs, toggleFavSong,
+    songStats, bumpSongUse, themes, songThemeOverrides, setSongThemeOverride,
     lyricsLinesPerSlide, setLyricsLinesPerSlide,
     show, updateLive, takeLive, live,
   } = useApp();
@@ -168,9 +169,36 @@ export default function SongsPage() {
       .filter(Boolean);
   }, [songs, q, packFilter, langFilter, onlyFav, favSongs]);
 
-  const song = songs.find((s) => s.id === songId) || list[0];
+  const songThemes = useMemo(() => themes.filter((t) => t.slot === "songs"), [themes]);
+
+  // Split favourites (pinned at top, sorted by most used first, then title) vs normal songs (V1.2 §6)
+  const { favList, otherList } = useMemo(() => {
+    const favs = list
+      .filter((s) => favSongs.includes(s.id))
+      .sort((a, b) => {
+        const ua = songStats[a.id]?.useCount || 0;
+        const ub = songStats[b.id]?.useCount || 0;
+        if (ub !== ua) return ub - ua;
+        return (a.title || "").localeCompare(b.title || "");
+      });
+    const others = list.filter((s) => !favSongs.includes(s.id));
+    return { favList: favs, otherList: others };
+  }, [list, favSongs, songStats]);
+
+  // Recently used songs row (V1.2 §6)
+  const recentlyUsed = useMemo(() => {
+    return songs
+      .filter((s) => songStats[s.id]?.lastUsedAt)
+      .sort((a, b) => (songStats[b.id]?.lastUsedAt || "").localeCompare(songStats[a.id]?.lastUsedAt || ""))
+      .slice(0, 5);
+  }, [songs, songStats]);
+
+  const song = songs.find((s) => s.id === songId) || favList[0] || otherList[0];
   const sec = song?.sections[slide] || song?.sections[0];
-  const item = song && sec ? { kind: "song", title: song.title, subtitle: song.author || "", body: sec.text, label: sec.label } : null;
+  const songTplId = song ? (songThemeOverrides[song.id] || "") : "";
+  const item = song && sec
+    ? { kind: "song", songId: song.id, title: song.title, subtitle: song.author || "", author: song.author || "", body: sec.text, label: sec.label, templateId: songTplId }
+    : null;
 
   const selectSlide = (idx, targetSong = song) => {
     if (!targetSong) return;
@@ -178,7 +206,16 @@ export default function SongsPage() {
     setSlide(clamped);
     const s = targetSong.sections[clamped];
     if (s) {
-      updateLive({ kind: "song", title: targetSong.title, subtitle: targetSong.author || "", body: s.text, label: s.label });
+      updateLive({
+        kind: "song",
+        songId: targetSong.id,
+        title: targetSong.title,
+        subtitle: targetSong.author || "",
+        author: targetSong.author || "",
+        body: s.text,
+        label: s.label,
+        templateId: songThemeOverrides[targetSong.id] || "",
+      });
     }
   };
 
@@ -257,53 +294,132 @@ export default function SongsPage() {
                 <Icon name="star" size={13} />Favourites
               </button>
             </div>
-            {list.map((s) => (
-              <button
-                key={s.id}
-                className={`verse ${song?.id === s.id ? "sel" : ""}`}
-                onClick={() => {
-                  setSongId(s.id);
-                  const startSlide = s.matchedSlide >= 0 ? s.matchedSlide : 0;
-                  selectSlide(startSlide, s);
-                }}
-                style={{ padding: "12px 14px" }}
-              >
-                <div className="row between">
-                  <b>{s.title}</b>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Favourite"
-                    onClick={(e) => { e.stopPropagation(); toggleFavSong(s.id); }}
-                    style={{ color: favSongs.includes(s.id) ? "var(--gold)" : "var(--text-2)" }}
-                  >
-                    <Icon name="star" size={16} />
-                  </span>
+            {recentlyUsed.length > 0 && (
+              <div className="col" style={{ gap: 6 }}>
+                <span className="label" style={{ fontSize: 11 }}>Recently used</span>
+                <div className="row wrap" style={{ gap: 6 }}>
+                  {recentlyUsed.map((rs) => (
+                    <button
+                      key={rs.id}
+                      className="chip clickable"
+                      onClick={() => {
+                        setSongId(rs.id);
+                        bumpSongUse(rs.id);
+                        selectSlide(0, rs);
+                      }}
+                    >
+                      {rs.title}
+                    </button>
+                  ))}
                 </div>
-                <div className="muted" style={{ fontSize: 12 }}>{s.author || "Unknown"} · {s.pack}</div>
-                {s.matchedLine && (
-                  <div style={{ fontSize: 12, marginTop: 4 }} className="muted">
-                    {highlightSegments(s.matchedLine.replace(/\n/g, " / "), q).map((seg, idx) =>
-                      seg.match ? <span key={idx} className="hl">{seg.text}</span> : <span key={idx}>{seg.text}</span>
+              </div>
+            )}
+
+            {favList.length > 0 && (
+              <div className="col" style={{ gap: 6 }}>
+                <span className="label" style={{ fontSize: 11 }}>Favourites (most used first)</span>
+                {favList.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`verse ${song?.id === s.id ? "sel" : ""}`}
+                    onClick={() => {
+                      setSongId(s.id);
+                      bumpSongUse(s.id);
+                      const startSlide = s.matchedSlide >= 0 ? s.matchedSlide : 0;
+                      selectSlide(startSlide, s);
+                    }}
+                    style={{ padding: "12px 14px" }}
+                  >
+                    <div className="row between">
+                      <b>{s.title}</b>
+                      <div className="row" style={{ gap: 6 }}>
+                        {(songStats[s.id]?.useCount || 0) > 0 && <span className="muted mono" style={{ fontSize: 11 }}>{songStats[s.id].useCount}×</span>}
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Unfavourite"
+                          onClick={(e) => { e.stopPropagation(); toggleFavSong(s.id); }}
+                          style={{ color: "var(--gold)" }}
+                        >
+                          <Icon name="star" size={16} />
+                        </span>
+                      </div>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>{s.author || "Unknown"} · {s.pack}</div>
+                    {s.matchedLine && (
+                      <div style={{ fontSize: 12, marginTop: 4 }} className="muted">
+                        {highlightSegments(s.matchedLine.replace(/\n/g, " / "), q).map((seg, idx) =>
+                          seg.match ? <span key={idx} className="hl">{seg.text}</span> : <span key={idx}>{seg.text}</span>
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
-              </button>
-            ))}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {otherList.length > 0 && (
+              <div className="col" style={{ gap: 6 }}>
+                {favList.length > 0 && <span className="label" style={{ fontSize: 11 }}>All songs</span>}
+                {otherList.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`verse ${song?.id === s.id ? "sel" : ""}`}
+                    onClick={() => {
+                      setSongId(s.id);
+                      bumpSongUse(s.id);
+                      const startSlide = s.matchedSlide >= 0 ? s.matchedSlide : 0;
+                      selectSlide(startSlide, s);
+                    }}
+                    style={{ padding: "12px 14px" }}
+                  >
+                    <div className="row between">
+                      <b>{s.title}</b>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Favourite"
+                        onClick={(e) => { e.stopPropagation(); toggleFavSong(s.id); }}
+                        style={{ color: "var(--text-2)" }}
+                      >
+                        <Icon name="star" size={16} />
+                      </span>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>{s.author || "Unknown"} · {s.pack}</div>
+                    {s.matchedLine && (
+                      <div style={{ fontSize: 12, marginTop: 4 }} className="muted">
+                        {highlightSegments(s.matchedLine.replace(/\n/g, " / "), q).map((seg, idx) =>
+                          seg.match ? <span key={idx} className="hl">{seg.text}</span> : <span key={idx}>{seg.text}</span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="col" style={{ gap: 10 }}>
             {song && (
-              <div className="row between">
+              <div className="row between wrap" style={{ gap: 8 }}>
                 <div><h2 style={{ fontSize: 22 }}>{song.title}</h2><span className="muted">{song.author}</span></div>
-                <span className="muted mono" style={{ fontSize: 12 }}>{slide + 1} / {song.sections.length}</span>
+                <div className="row" style={{ gap: 8 }}>
+                  <Select
+                    ariaLabel="Per-song template override"
+                    style={{ width: 190 }}
+                    value={songTplId}
+                    onChange={(tid) => setSongThemeOverride(song.id, tid)}
+                    options={[{ value: "", label: "Default song template" }, ...songThemes.map((t) => ({ value: t.id, label: t.name }))]}
+                  />
+                  <span className="muted mono" style={{ fontSize: 12 }}>{slide + 1} / {song.sections.length}</span>
+                </div>
               </div>
             )}
             {song?.sections.map((s, i) => (
               <button
                 key={i}
                 className={`slide ${i === slide ? "sel" : ""} ${live && live.title === song.title && live.body === s.text ? "live" : ""}`}
-                onClick={() => selectSlide(i)}
-                onDoubleClick={() => takeLive({ kind: "song", title: song.title, subtitle: song.author || "", body: s.text, label: s.label })}
+                onClick={() => { bumpSongUse(song.id); selectSlide(i); }}
+                onDoubleClick={() => { bumpSongUse(song.id); takeLive({ kind: "song", songId: song.id, title: song.title, subtitle: song.author || "", author: song.author || "", body: s.text, label: s.label, templateId: songTplId }); }}
               >
                 {s.label && <span className="pill">{s.label}</span>}
                 <div>{s.text}</div>

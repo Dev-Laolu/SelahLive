@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth";
 import { SAMPLE_VERSE } from "@/lib/defaults";
 
 const NAV = [
+  { href: "/app/overview", label: "Overview", icon: "home" },
   { href: "/app/scripture", label: "Scripture", icon: "book" },
   { href: "/app/songs", label: "Songs", icon: "music" },
   { href: "/app/text", label: "Text", icon: "type" },
@@ -142,7 +143,7 @@ export default function AppShell({ children, pending, preview = true }) {
   if (!ready || user === undefined) return <div className="auth-bg"><Logo size={48} stacked /></div>;
   const obsChip = obsStatus === "connected" ? <span className="chip ok"><Icon name="checkc" size={14} />OBS connected</span>
     : obsStatus === "connecting" ? <span className="chip warn"><Icon name="loader" size={14} className="spin" />Connecting…</span>
-    : <span className="chip bad"><Icon name="alertc" size={14} />OBS not connected</span>;
+      : <span className="chip bad"><Icon name="alertc" size={14} />OBS not connected</span>;
 
   return (
     <div className={`shell ${preview ? "" : "no-preview"}`}>

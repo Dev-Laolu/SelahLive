@@ -20,7 +20,7 @@ function HighlightedText({ text, query }) {
 
 export default function ScripturePage() {
   const {
-    bibles, songPacks, customSongs, recentTexts,
+    bibles,
     activeBibleId, setActiveBibleId,
     show, updateLive, takeLive, live,
     recent, addRecent, pinned, togglePin,
@@ -28,31 +28,37 @@ export default function ScripturePage() {
   const toast = useToast();
 
   const [q, setQ] = useState("John 3:16");
-  const [scope, setScope] = useState("all"); // all | scripture | songs | text
   const [allVersions, setAllVersions] = useState(false);
   const [sel, setSel] = useState(null);
   const [selIdx, setSelIdx] = useState(0);
   const inputRef = useRef(null);
 
+  // Pick up ?q=... when arriving from Overview's "Open in Scripture"
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const paramQ = new URLSearchParams(window.location.search).get("q");
+    if (paramQ && paramQ.trim()) setQ(paramQ.trim());
+  }, []);
+
   const pack = bibles.find((b) => b.id === activeBibleId) || bibles[0];
 
-  const bookSuggestions = useMemo(() => (scope === "all" || scope === "scripture" ? getBookSuggestions(q, pack) : []), [q, pack, scope]);
-  const guidance = useMemo(() => (scope === "all" || scope === "scripture" ? getReferenceGuidance(q, pack) : null), [q, pack, scope]);
+  const bookSuggestions = useMemo(() => getBookSuggestions(q, pack), [q, pack]);
+  const guidance = useMemo(() => getReferenceGuidance(q, pack), [q, pack]);
 
   const searchOut = useMemo(
     () =>
       unifiedSearch({
         packs: bibles,
         selectedPackId: pack?.id,
-        songPacks,
-        customSongs,
-        recentTexts,
+        songPacks: [],
+        customSongs: [],
+        recentTexts: [],
         query: q,
-        scope,
+        scope: "scripture",
         allVersions,
         limit: 50,
       }),
-    [bibles, pack?.id, songPacks, customSongs, recentTexts, q, scope, allVersions]
+    [bibles, pack?.id, q, allVersions]
   );
 
   const results = searchOut.results;
@@ -287,8 +293,8 @@ export default function ScripturePage() {
             maxLength={200}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={`Search verse (John 3:16-18), keywords ("love your neighbor"), or song…`}
-            aria-label="Smart search scripture, songs, and text"
+            placeholder={`Search Bible reference (John 3:16-18) or keywords ("love your neighbor")…`}
+            aria-label="Search scripture references and Bible text"
           />
         </div>
         {bibles.length > 0 && (
@@ -304,27 +310,15 @@ export default function ScripturePage() {
         )}
       </div>
 
-      {/* Scope Tabs + All Versions Toggle */}
-      <div className="row between wrap" style={{ gap: 10 }}>
-        <div className="tabs" role="tablist" style={{ borderBottom: 0 }}>
-          {[
-            ["all", "All"],
-            ["scripture", "Scripture"],
-            ["songs", "Songs"],
-            ["text", "Text"],
-          ].map(([k, l]) => (
-            <button key={k} role="tab" aria-selected={scope === k} onClick={() => setScope(k)} style={{ padding: "6px 12px" }}>
-              {l}
-            </button>
-          ))}
-        </div>
-        {bibles.length > 1 && (
+      {/* All Versions Toggle (Scripture-only screen) */}
+      {bibles.length > 1 && (
+        <div className="row" style={{ gap: 10 }}>
           <label className="check" style={{ fontSize: 12, alignItems: "center" }}>
             <input type="checkbox" checked={allVersions} onChange={(e) => setAllVersions(e.target.checked)} />
-            <span className="muted">All downloaded versions</span>
+            <span className="muted">Search across all downloaded Bible versions</span>
           </label>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Book Suggestion Chips (e.g. typing "Jo") */}
       {bookSuggestions.length > 0 && !guidance?.ref?.chapter && (
@@ -407,7 +401,7 @@ export default function ScripturePage() {
       )}
 
       {/* Results List */}
-      {!pack && scope !== "songs" && scope !== "text" ? (
+      {!pack ? (
         <div className="empty">
           <Icon name="library" />
           <h3 style={{ color: "var(--text)" }}>Download a Bible version to get started</h3>
@@ -418,13 +412,12 @@ export default function ScripturePage() {
         <div className="empty">
           <Icon name="search" />
           <b style={{ color: "var(--text)" }}>No matches found</b>
-          <span>Try a reference like “John 3:16-18”, “1 Jn 4:8”, a phrase in quotes, or a song title.</span>
+          <span>Try a reference like “John 3:16-18”, “1 Jn 4:8”, or a phrase in quotes.</span>
         </div>
       ) : (
         <>
           <div className="muted mono" style={{ fontSize: 12 }}>
             {results.length} {results.length === 1 ? "match" : "matches"}
-            {searchOut.scopeUsed !== scope ? ` · Auto-detected ${searchOut.scopeUsed}` : ""}
           </div>
           <div className="col" style={{ gap: 10 }}>
             {results.map((r, idx) => {

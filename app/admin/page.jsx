@@ -812,15 +812,50 @@ function SongsTab() {
       </div>
 
       <div className="card col" style={{ gap: 16 }}>
-        <h3>Upload song pack (minimum 20 songs)</h3>
+        <div className="row between wrap" style={{ gap: 10 }}>
+          <h3 style={{ margin: 0 }}>Upload song pack (minimum 20 songs)</h3>
+          <a
+            href="/templates/selah-live-song-pack-template.txt"
+            download="selah-live-song-pack-template.txt"
+            className="btn btn-secondary btn-sm"
+          >
+            <Icon name="download" size={15} /> Download template (.txt)
+          </a>
+        </div>
+
         <label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files?.length) { setFiles([...e.dataTransfer.files]); setRep(null); setDraft(null); } }}>
           <div>
             <Icon name="upload" size={28} className="gold" />
             <div style={{ marginTop: 6 }}><b>{files.length ? `${files.length} file(s) selected: ${files.map((f) => f.name).join(", ")}` : "Drop multiple .txt files, a .zip of .txt files, or a combined .txt (separated by === SONG ===)"}</b></div>
-            <div className="muted" style={{ fontSize: 12 }}>Minimum 20 songs per pack. Max 10 MB per file.</div>
+            <div className="muted" style={{ fontSize: 12 }}>Minimum 20 songs per pack. UTF-8 only. Max 10 MB per file.</div>
           </div>
           <input type="file" hidden multiple accept=".txt,.zip" onChange={(e) => { setFiles([...(e.target.files || [])]); setRep(null); setDraft(null); }} />
         </label>
+
+        <details className="card raised" style={{ padding: "10px 14px" }}>
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13 }}>Format guide &amp; example (=== SONG ===)</summary>
+          <div className="col" style={{ gap: 8, marginTop: 10, fontSize: 13 }}>
+            <ul className="muted" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.55 }}>
+              <li>Separate songs with a line containing exactly <code>=== SONG ===</code> (or upload multiple <code>.txt</code> files / a <code>.zip</code>).</li>
+              <li>Lines starting with <code>#</code> are comments and are ignored.</li>
+              <li>Headers at the top of each song: <code>Title:</code> (required), <code>Author:</code>, <code>Language:</code> (default English), <code>CCLI:</code>.</li>
+              <li>Leave a blank line after headers, then add lyrics. Optional section labels go in brackets: <code>[Verse 1]</code>, <code>[Chorus]</code>, <code>[Bridge]</code>.</li>
+              <li><b>A blank line separates slides.</b> Lines within a slide stay together.</li>
+              <li>UTF-8 only · Max 40 lines/slide · Max 200 slides/song · Warn above 120 chars/line · Minimum <b>20 songs</b> to publish.</li>
+            </ul>
+            <pre className="mono" style={{ margin: 0, padding: 10, borderRadius: 8, background: "var(--bg)", fontSize: 12, overflowX: "auto" }}>{`=== SONG ===
+Title: Amazing Grace
+Author: John Newton
+Language: English
+
+[Verse 1]
+Amazing grace, how sweet the sound
+That saved a wretch like me
+
+I once was lost, but now am found
+Was blind, but now I see`}</pre>
+          </div>
+        </details>
 
         <div className="grid2">
           <div className="field"><label htmlFor="sp-name">Pack name</label><input id="sp-name" className="input" value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value, notificationText: `New song pack: ${e.target.value} is ready to download.` })} /></div>
@@ -834,7 +869,7 @@ function SongsTab() {
 
         <div className="row wrap">
           <button className="btn btn-secondary" disabled={!files.length || busy} onClick={uploadAndValidate}>
-            {busy ? "Parsing…" : "1. Validate and preview"}
+            {busy ? "Validating…" : "1. Validate file (dry run)"}
           </button>
           <button className="btn btn-secondary" disabled={!liveValidation?.ok || !meta.rights || busy} onClick={saveDraft}>
             2. Save as Draft ({songs.length} songs)
@@ -850,11 +885,24 @@ function SongsTab() {
 
         {err && <div className="banner bad"><Icon name="alertc" size={18} /><span className="grow">{err}</span></div>}
 
-        {liveValidation && (
-          <div className="col" style={{ gap: 10 }}>
-            {liveValidation.errors.map((e) => <div key={e} className="banner bad"><Icon name="alertc" size={18} />{e}</div>)}
-            {liveValidation.problems.map((p, i) => <div key={i} className="banner warn"><Icon name="alert" size={18} />{p}</div>)}
-            {liveValidation.ok && <div className="banner ok"><Icon name="checkc" size={18} />{songs.length} songs validated (minimum 20 met). Ready to save draft and publish.</div>}
+        {(liveValidation || rep) && (
+          <div className="col" style={{ gap: 8 }}>
+            {songs.length < 20 && rep && (
+              <div className="banner bad">
+                <Icon name="alertc" size={18} />
+                <span>This pack has {songs.length} song{songs.length === 1 ? "" : "s"}. Add at least {20 - songs.length} more.</span>
+              </div>
+            )}
+            {(rep?.errors || []).filter((e) => !e.startsWith("This pack has ")).map((e, i) => (
+              <div key={`err-${i}`} className="banner bad"><Icon name="alertc" size={18} /><span>{e}</span></div>
+            ))}
+            {(rep?.warnings || []).map((w, i) => (
+              <div key={`warn-${i}`} className="banner warn"><Icon name="alert" size={18} /><span>{w}</span></div>
+            ))}
+            {liveValidation?.problems?.map((p, i) => <div key={`lp-${i}`} className="banner warn"><Icon name="alert" size={18} />{p}</div>)}
+            {liveValidation?.ok && rep?.ok && (
+              <div className="banner ok"><Icon name="checkc" size={18} />{songs.length} songs validated (minimum 20 met). Ready to save draft and publish.</div>
+            )}
           </div>
         )}
 

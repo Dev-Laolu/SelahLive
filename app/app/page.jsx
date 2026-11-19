@@ -1,2 +1,2 @@
 import { redirect } from "next/navigation";
-export default function Page() { redirect("/app/scripture"); }
+export default function Page() { redirect("/app/overview"); }

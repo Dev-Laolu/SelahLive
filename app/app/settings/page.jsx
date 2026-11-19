@@ -11,7 +11,7 @@ import { OBS_ERRORS } from "@/lib/obs";
 import { useToast } from "@/components/Toast";
 
 export default function SettingsPage() {
-  const { obs, obsStatus, obsError, obsConf, saveObsConf, connectObs, theme, changeTheme } = useApp();
+  const { obs, obsStatus, obsError, obsConf, saveObsConf, connectObs, theme, changeTheme, syncStatus, lastSyncedAt, syncNotice, syncNow } = useApp();
   const { user, logOut, changePassword } = useAuth();
   const router = useRouter(); const toast = useToast();
   const [pw, setPw] = useState(obsConf.password || ""); const [show, setShow] = useState(false);
@@ -28,7 +28,7 @@ export default function SettingsPage() {
       obs.getScenes().then((r) => {
         setScenes(r.scenes || []);
         setScene((cur) => cur || r.current || "");
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [obsStatus, obs]);
 
@@ -95,7 +95,36 @@ export default function SettingsPage() {
       <div className="card col"><h3>Startup help</h3>
         <p style={{ margin: 0 }}>Selah Live must be running (minimized is fine) for verses to show. It can't run after it's closed.</p>
         <ul className="muted" style={{ margin: 0, paddingLeft: 20 }}><li><b>Chrome:</b> open chrome://apps, right-click Selah Live, choose “Start app when you sign in”.</li><li><b>Edge:</b> open edge://apps, choose “Start app on device login”. Turn off “sleeping tabs” for this app.</li></ul></div>
-      <div className="card col"><h3>Account</h3><div><b>{user?.name}</b><div className="muted">{user?.email}</div></div>
+      <div className="card col">
+        <div className="row between wrap" style={{ gap: 8 }}>
+          <h3>Account &amp; cloud sync</h3>
+          <div className="row" style={{ gap: 8 }}>
+            <span className={`chip ${syncStatus === "synced" ? "ok" : syncStatus === "offline" || syncStatus === "error" ? "warn" : ""}`}>
+              <span className={`dot ${syncStatus === "synced" ? "ok" : syncStatus === "syncing" ? "gold pulse" : "warn"}`} />
+              {syncStatus === "synced" ? "Synced" : syncStatus === "syncing" ? "Syncing…" : syncStatus === "offline" ? "Offline" : syncStatus === "error" ? "Sync error" : "Local only"}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={syncStatus === "syncing"}
+              onClick={async () => {
+                const res = await syncNow();
+                toast(res?.status === "synced" ? "Account synced across devices." : res?.status === "offline" ? "You are offline. Changes will sync automatically when online." : "Sign in to sync your account.");
+              }}
+            >
+              <Icon name="refresh" size={14} /> Sync now
+            </button>
+          </div>
+        </div>
+        <div>
+          <b>{user?.name}</b>
+          <div className="muted">{user?.email}</div>
+          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Syncs display settings, custom templates, saved texts, custom songs, favourites, recent items, and church images (via Neon storage). OBS password and pairing code stay local on this computer.
+            {lastSyncedAt && ` · Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`}
+          </div>
+          {syncNotice && <div className="chip ok" style={{ marginTop: 6 }}>{syncNotice}</div>}
+        </div>
         <form className="row wrap" onSubmit={handleChangePassword}>
           <input className="input" style={{ maxWidth: 280 }} type="password" autoComplete="new-password" placeholder="New password (min 8 chars)" value={newAcctPw} onChange={(e) => setNewAcctPw(e.target.value)} aria-label="New account password" />
           <button className="btn btn-secondary" type="submit" disabled={!newAcctPw || pwChanging}>{pwChanging ? "Updating…" : "Change password"}</button>
@@ -104,7 +133,7 @@ export default function SettingsPage() {
       </div>
       <div className="card row between"><div><h3>Theme</h3><span className="muted">Dark is easier in a dim room.</span></div>
         <div className="seg" style={{ width: 220 }}><button aria-pressed={theme === "dark"} onClick={() => changeTheme("dark")}><Icon name="moon" size={14} /> Dark</button><button aria-pressed={theme === "light"} onClick={() => changeTheme("light")}><Icon name="sun" size={14} /> Light</button></div></div>
-      <div className="card"><h3>About</h3><span className="muted">Selah Live v0.1.0 · Free for churches.</span></div>
+      <div className="card"><h3>About</h3><span className="muted">Selah Live v1.2.0 · Free for churches.</span></div>
     </AppShell>
   );
 }

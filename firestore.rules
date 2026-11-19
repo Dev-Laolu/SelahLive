@@ -9,14 +9,59 @@ rules_version = '2';
 // Collection: users
 // Document ID: {uid} (matches Firebase Auth UID)
 // Fields:
-//   - name: string (required, 1..100 chars) - user display name
-//   - email: string (required, 3..254 chars, valid email format) - user email (PII)
+//   - name: string (optional if created by sync first, 1..100 chars) - user display name
+//   - email: string (optional if created by sync first, 3..254 chars, valid email format) - user email (PII)
 //   - churchName: string (optional, 0..150 chars) - church branding name
 //   - logoUrl: string (optional, 0..2048 chars, valid http/https URL if non-empty) - church logo URL
 //   - theme: string (optional, enum: 'dark' | 'light') - UI theme preference
 //   - pairId: string (optional, 0..64 chars) - OBS dock pairing identifier
-//   - createdAt: timestamp (required, immutable on update) - account creation timestamp
-//   - lastActiveAt: timestamp (required) - last active timestamp
+//   - createdAt: timestamp (optional on sync-first create, immutable once set) - account creation timestamp
+//   - lastActiveAt: timestamp (optional) - last active timestamp
+//   - displaySettings: map (optional, <= 60 keys, must not contain obsPassword) - synced display/branding settings
+//   - activeThemeIds: map (optional, <= 20 keys) - default template IDs per slot
+//   - favSongs: list (optional, <= 500 items) - favourited song IDs
+//   - songStats: map (optional, <= 2000 keys) - song usage counters and last-used timestamps
+//   - customSongs: list (optional, <= 150 items) - user-created custom songs
+//   - recent: list (optional, <= 20 items) - recently displayed items
+//   - pinned: list (optional, <= 20 items) - pinned items
+//   - songThemeOverrides: map (optional, <= 500 keys) - per-song/per-pack template overrides
+//   - assetRefs: map (optional, <= 100 keys) - remote asset references (Neon S3 URLs/metadata)
+//   - updatedAt: timestamp or string (optional, 1..64 chars if string) - last sync update timestamp
+//   (obsPassword is NEVER permitted on this document or inside displaySettings)
+//
+// Subcollection: users/{uid}/savedTexts
+// Document ID: {textId}
+// Fields:
+//   - id: string (optional, 1..128 chars, must match {textId}, immutable once set) - saved text identifier
+//   - title: string (required, 1..100 chars) - saved text title
+//   - body: string (required, 0..10000 chars) - saved text body
+//   - tags: list (required, <= 20 items) - tag labels
+//   - favourite: bool (required) - favourite flag
+//   - updatedAt: timestamp or string (required, 1..64 chars if string) - last-write-wins timestamp
+//   - templateId: string (optional, 0..128 chars) - associated template ID
+//   - useCount: int (optional, 0..1000000) - usage counter
+//   - lastUsedAt: string (optional, 0..64 chars) - last-used ISO timestamp
+//   - createdAt: timestamp or string (optional, 1..64 chars if string, immutable once set) - creation timestamp
+//   - deleted: bool (optional) - tombstone deletion marker
+//
+// Subcollection: users/{uid}/customTemplates
+// Document ID: {templateId}
+// Fields:
+//   - id: string (optional, 1..128 chars, must match {templateId}, immutable once set) - template identifier
+//   - name: string (required, 1..60 chars) - custom template name
+//   - slot: string (required, enum: 'scripture' | 'songs' | 'text') - template slot
+//   - version: int (required, must be 2) - v2 theme schema version
+//   - builtIn: bool (required, must be false) - prevents overwriting built-in templates
+//   - updatedAt: string (required, 1..64 chars) - last-write-wins ISO timestamp
+//   - deleted: bool (optional) - tombstone deletion marker
+//   - lowerThird: map (required, <= 120 keys) - lower third layout definition
+//   - fullScreen: map (required, <= 120 keys) - full screen layout definition
+//   - description: string (optional, 0..240 chars) - template description
+//   - styleTag: string (optional, 0..60 chars) - style category tag
+//   - useCount: int (optional, 0..1000000) - usage counter
+//   - createdAt: string (optional, 0..64 chars, immutable once set) - creation ISO timestamp
+//   - placeholderTitle: string (optional, 0..120 chars) - optional placeholder title for text templates
+//   - placeholderBody: string (optional, 0..500 chars) - optional placeholder body for text templates
 //
 // Collection: comments
 // Document ID: {commentId}
@@ -122,6 +167,17 @@ service cloud.firestore {
          request.resource.data[field].size() <= maxLen);
     }
 
+    // Validate that a list is a list and enforces size limits
+    function isValidList(listVal, maxSize) {
+      return listVal is list && listVal.size() <= maxSize;
+    }
+
+    // Validate timestamp or bounded ISO date string
+    function isValidTimestampOrIsoString(val) {
+      return val is timestamp ||
+        (val is string && val.size() >= 1 && val.size() <= 64);
+    }
+
     // Validate URL format (must start with https:// or http://)
     function isValidUrl(url) {
       return url is string &&
@@ -142,16 +198,82 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      return hasRequiredFields(['name', 'email', 'createdAt', 'lastActiveAt']) &&
-        hasOnlyAllowedFields(['name', 'email', 'churchName', 'logoUrl', 'theme', 'pairId', 'createdAt', 'lastActiveAt']) &&
-        validStringLength('name', 1, 100) &&
-        isValidEmail(data.email) &&
+      return hasOnlyAllowedFields([
+          'name', 'email', 'churchName', 'logoUrl', 'theme', 'pairId',
+          'createdAt', 'lastActiveAt',
+          'displaySettings', 'activeThemeIds', 'favSongs', 'songStats',
+          'customSongs', 'recent', 'pinned', 'songThemeOverrides',
+          'assetRefs', 'updatedAt'
+        ]) &&
+        !('obsPassword' in data) &&
+        (hasRequiredFields(['name', 'email', 'createdAt', 'lastActiveAt']) ||
+         hasRequiredFields(['updatedAt'])) &&
+        isValidOptionalString('name', 1, 100) &&
+        (!('email' in data) || isValidEmail(data.email)) &&
         isValidOptionalString('churchName', 0, 150) &&
         isValidOptionalString('pairId', 0, 64) &&
         (!('logoUrl' in data) || (data.logoUrl is string && (data.logoUrl.size() == 0 || isValidUrl(data.logoUrl)))) &&
         (!('theme' in data) || (data.theme is string && data.theme in ['dark', 'light'])) &&
-        data.createdAt is timestamp &&
-        data.lastActiveAt is timestamp;
+        (!('createdAt' in data) || data.createdAt is timestamp) &&
+        (!('lastActiveAt' in data) || data.lastActiveAt is timestamp) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoString(data.updatedAt)) &&
+        (!('displaySettings' in data) || (data.displaySettings is map && data.displaySettings.keys().size() <= 60 && !('obsPassword' in data.displaySettings))) &&
+        (!('activeThemeIds' in data) || (data.activeThemeIds is map && data.activeThemeIds.keys().size() <= 20)) &&
+        (!('favSongs' in data) || isValidList(data.favSongs, 500)) &&
+        (!('songStats' in data) || (data.songStats is map && data.songStats.keys().size() <= 2000)) &&
+        (!('customSongs' in data) || isValidList(data.customSongs, 150)) &&
+        (!('recent' in data) || isValidList(data.recent, 20)) &&
+        (!('pinned' in data) || isValidList(data.pinned, 20)) &&
+        (!('songThemeOverrides' in data) || (data.songThemeOverrides is map && data.songThemeOverrides.keys().size() <= 500)) &&
+        (!('assetRefs' in data) || (data.assetRefs is map && data.assetRefs.keys().size() <= 100));
+    }
+
+    function isValidSavedText(data, textId) {
+      return hasRequiredFields(['title', 'body', 'tags', 'favourite', 'updatedAt']) &&
+        hasOnlyAllowedFields([
+          'id', 'title', 'body', 'tags', 'favourite', 'updatedAt',
+          'templateId', 'useCount', 'lastUsedAt', 'createdAt', 'deleted'
+        ]) &&
+        (!('id' in data) || (data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id == textId)) &&
+        validStringLength('title', 1, 100) &&
+        validStringLength('body', 0, 10000) &&
+        isValidList(data.tags, 20) &&
+        data.favourite is bool &&
+        isValidTimestampOrIsoString(data.updatedAt) &&
+        isValidOptionalString('templateId', 0, 128) &&
+        (!('useCount' in data) || (data.useCount is int && data.useCount >= 0 && data.useCount <= 1000000)) &&
+        isValidOptionalString('lastUsedAt', 0, 64) &&
+        (!('createdAt' in data) || isValidTimestampOrIsoString(data.createdAt)) &&
+        (!('deleted' in data) || data.deleted is bool);
+    }
+
+    function isValidCustomTemplate(data, templateId) {
+      return hasRequiredFields(['name', 'slot', 'version', 'builtIn', 'updatedAt', 'lowerThird', 'fullScreen']) &&
+        hasOnlyAllowedFields([
+          'id', 'name', 'slot', 'version', 'builtIn', 'updatedAt', 'deleted',
+          'lowerThird', 'fullScreen', 'description', 'styleTag', 'useCount',
+          'createdAt', 'placeholderTitle', 'placeholderBody'
+        ]) &&
+        (!('id' in data) || (data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id == templateId)) &&
+        validStringLength('name', 1, 60) &&
+        data.slot is string &&
+        data.slot in ['scripture', 'songs', 'text'] &&
+        data.version is int &&
+        data.version == 2 &&
+        data.builtIn is bool &&
+        data.builtIn == false &&
+        validStringLength('updatedAt', 1, 64) &&
+        (!('deleted' in data) || data.deleted is bool) &&
+        data.lowerThird is map &&
+        data.lowerThird.keys().size() <= 120 &&
+        data.fullScreen is map &&
+        data.fullScreen.keys().size() <= 120 &&
+        isValidOptionalString('description', 0, 240) &&
+        isValidOptionalString('styleTag', 0, 60) &&
+        (!('useCount' in data) || (data.useCount is int && data.useCount >= 0 && data.useCount <= 1000000)) &&
+        isValidOptionalString('createdAt', 0, 64) &&
+        isValidOptionalString('placeholderTitle', 0, 120) &&
+        isValidOptionalString('placeholderBody', 0, 500);
     }
 
     function isValidComment(data) {
@@ -179,15 +301,38 @@ service cloud.firestore {
     // Collection Rules
     // ===============================================================
 
-    // Users collection: contains PII (email). Readable only by the owner or an admin.
-    // Writable only by the owner with strict schema validation and immutable createdAt.
+    // Users collection: contains PII (email) and V1.2 account sync state.
+    // Readable only by the owner or an admin; writable only by the owner with strict schema validation.
+    // Never permits storing obsPassword.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
       allow create: if isOwner(uid) && isValidUser(request.resource.data);
       allow update: if isOwner(uid) &&
         isValidUser(request.resource.data) &&
-        areImmutableFieldsUnchanged(['createdAt']);
+        (!('createdAt' in resource.data) || areImmutableFieldsUnchanged(['createdAt']));
       allow delete: if isOwner(uid) || isAdmin();
+
+      // Saved Texts subcollection: owner-only read/write with LWW tombstone sync.
+      match /savedTexts/{textId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidSavedText(request.resource.data, textId);
+        allow update: if isOwner(uid) &&
+          isValidSavedText(request.resource.data, textId) &&
+          (!('createdAt' in resource.data) || areImmutableFieldsUnchanged(['createdAt'])) &&
+          (!('id' in resource.data) || areImmutableFieldsUnchanged(['id']));
+        allow delete: if isOwner(uid);
+      }
+
+      // Custom Templates subcollection: owner-only read/write for v2 custom (non-builtIn) templates.
+      match /customTemplates/{templateId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidCustomTemplate(request.resource.data, templateId);
+        allow update: if isOwner(uid) &&
+          isValidCustomTemplate(request.resource.data, templateId) &&
+          (!('createdAt' in resource.data) || areImmutableFieldsUnchanged(['createdAt'])) &&
+          (!('id' in resource.data) || areImmutableFieldsUnchanged(['id']));
+        allow delete: if isOwner(uid);
+      }
     }
 
     // Comments collection: feedback on songs, packs, and translations.

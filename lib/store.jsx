@@ -3,13 +3,56 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ObsClient, isSelah } from "@/lib/obs";
 import { getKey, setKey, delKey, allPacks, allStoreEntries, db } from "@/lib/db";
 import { DEFAULT_STYLE } from "@/lib/defaults";
-import { DEFAULT_THEMES, validateTheme } from "@/lib/themes";
+import { DEFAULT_THEMES, sanitizeTheme, migrateThemeToV2, isTemplateNameTaken } from "@/lib/themes";
 import { unifiedSearch } from "@/lib/search";
+import { runAccountSync } from "@/lib/sync";
 import { gunzipSync, unzipSync } from "fflate";
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
+
+const STARTER_SAVED_TEXTS = [
+  {
+    id: "starter-offering",
+    title: "Offering today",
+    body: "Thank you for your generous giving.\nGive online or via our church app.",
+    tags: ["Service", "Giving"],
+    favourite: true,
+    templateId: "tpl-offering",
+    useCount: 0,
+    lastUsedAt: "",
+    createdAt: "2026-11-01T09:00:00.000Z",
+    updatedAt: "2026-11-01T09:00:00.000Z",
+    deleted: false,
+  },
+  {
+    id: "starter-welcome",
+    title: "Welcome",
+    body: "Welcome home! We are so glad you joined us today.\nSay hello in the chat and let us pray with you.",
+    tags: ["Service", "Welcome"],
+    favourite: true,
+    templateId: "tpl-welcome",
+    useCount: 0,
+    lastUsedAt: "",
+    createdAt: "2026-11-01T09:01:00.000Z",
+    updatedAt: "2026-11-01T09:01:00.000Z",
+    deleted: false,
+  },
+  {
+    id: "starter-prayer",
+    title: "Prayer",
+    body: "Let us bow our heads and lift our hearts together in prayer.",
+    tags: ["Service", "Prayer"],
+    favourite: false,
+    templateId: "tpl-prayer-moment",
+    useCount: 0,
+    lastUsedAt: "",
+    createdAt: "2026-11-01T09:02:00.000Z",
+    updatedAt: "2026-11-01T09:02:00.000Z",
+    deleted: false,
+  },
+];
 const rid = () => {
   if (typeof crypto !== "undefined" && crypto.getRandomValues) {
     const arr = new Uint8Array(8);
@@ -56,8 +99,14 @@ export function AppProvider({ children }) {
   const [recent, setRecent] = useState([]);
   const [pinned, setPinned] = useState([]);
   const [favSongs, setFavSongs] = useState([]);
+  const [songStats, setSongStats] = useState({});
+  const [songThemeOverrides, setSongThemeOverrides] = useState({});
   const [customSongs, setCustomSongs] = useState([]);
   const [recentTexts, setRecentTexts] = useState([]);
+  const [savedTexts, setSavedTexts] = useState([]);
+  const [syncStatus, setSyncStatus] = useState("local"); // synced | syncing | offline | local | error
+  const [lastSyncedAt, setLastSyncedAt] = useState("");
+  const [syncNotice, setSyncNotice] = useState("");
   const [notices, setNotices] = useState([]);
   const [setupDone, setSetupDone] = useState(false);
   const [theme, setTheme] = useState("dark");
@@ -71,10 +120,18 @@ export function AppProvider({ children }) {
   const activeThemeIdsRef = useRef(activeThemeIds);
   const packsRef = useRef([]);
   const customSongsRef = useRef([]);
+  const favSongsRef = useRef([]);
+  const songStatsRef = useRef({});
+  const songThemeOverridesRef = useRef({});
+  const recentRef = useRef([]);
+  const pinnedRef = useRef([]);
   const recentTextsRef = useRef([]);
+  const savedTextsRef = useRef([]);
   const activeBibleIdRef = useRef("");
   const recentItems = useRef([]);
   const obsConfRef = useRef(obsConf);
+  const localUpdatedAtRef = useRef("");
+  const syncTimerRef = useRef(null);
 
   useEffect(() => { liveRef.current = live; }, [live]);
   useEffect(() => { liveFollowRef.current = liveFollow; }, [liveFollow]);
@@ -84,14 +141,24 @@ export function AppProvider({ children }) {
   useEffect(() => { activeThemeIdsRef.current = activeThemeIds; }, [activeThemeIds]);
   useEffect(() => { packsRef.current = packs; }, [packs]);
   useEffect(() => { customSongsRef.current = customSongs; }, [customSongs]);
+  useEffect(() => { favSongsRef.current = favSongs; }, [favSongs]);
+  useEffect(() => { songStatsRef.current = songStats; }, [songStats]);
+  useEffect(() => { songThemeOverridesRef.current = songThemeOverrides; }, [songThemeOverrides]);
+  useEffect(() => { recentRef.current = recent; }, [recent]);
+  useEffect(() => { pinnedRef.current = pinned; }, [pinned]);
   useEffect(() => { recentTextsRef.current = recentTexts; }, [recentTexts]);
+  useEffect(() => { savedTextsRef.current = savedTexts; }, [savedTexts]);
   useEffect(() => { activeBibleIdRef.current = activeBibleId; }, [activeBibleId]);
   useEffect(() => { obsConfRef.current = obsConf; }, [obsConf]);
 
   // ---- boot: load everything from IndexedDB
   useEffect(() => {
     (async () => {
-      const [st, oc, rc, pn, fv, cs, rt, sd, th, sess, lf, savedThemes, savedActiveThemes, savedAssets, lps, srs] = await Promise.all([
+      const [
+        st, oc, rc, pn, fv, cs, rt, sd, th, sess, lf,
+        savedThemes, savedActiveThemes, savedAssets, lps, srs,
+        stStats, stOverrides, loadedSavedTexts, savedUpdatedAt
+      ] = await Promise.all([
         getKey("settings", "style", DEFAULT_STYLE),
         getKey("settings", "obs", null),
         getKey("lists", "recent", []),
@@ -108,6 +175,10 @@ export function AppProvider({ children }) {
         allStoreEntries("assets"),
         getKey("settings", "lyricsLinesPerSlide", 2),
         getKey("settings", "scriptureRangeSplit", false),
+        getKey("lists", "songStats", {}),
+        getKey("lists", "songThemeOverrides", {}),
+        allStoreEntries("savedTexts"),
+        getKey("settings", "localUpdatedAt", ""),
       ]);
       const mergedStyle = { ...DEFAULT_STYLE, ...st };
       setStyleState(mergedStyle);
@@ -115,19 +186,33 @@ export function AppProvider({ children }) {
       setObsConf(oc || { host: "localhost", port: 4455, password: "", pairId: rid(), scene: "" });
       if (!oc) setKey("settings", "obs", { host: "localhost", port: 4455, password: "", pairId: "", scene: "" });
       setRecent(rc); setPinned(pn); setFavSongs(fv); setCustomSongs(cs); setRecentTexts(rt);
+      setSongStats(stStats || {});
+      setSongThemeOverrides(stOverrides || {});
       setSetupDone(sd); setTheme(th); setLiveFollowState(lf !== false);
       setLyricsLinesPerSlideState(Number(lps) || 2);
       setScriptureRangeSplitState(!!srs);
+      localUpdatedAtRef.current = savedUpdatedAt || "";
 
-      if (savedThemes && savedThemes.length > 0) {
-        const merged = [...DEFAULT_THEMES];
-        for (const t of savedThemes) {
-          const idx = merged.findIndex((x) => x.id === t.id);
-          if (idx >= 0) merged[idx] = t;
-          else merged.push(t);
-        }
-        setThemes(merged);
+      // Seed starter saved texts on first boot if none exist (V1.2 §5.1)
+      if (!loadedSavedTexts || loadedSavedTexts.length === 0) {
+        for (const item of STARTER_SAVED_TEXTS) await setKey("savedTexts", item.id, item);
+        setSavedTexts(STARTER_SAVED_TEXTS);
+      } else {
+        setSavedTexts(loadedSavedTexts);
       }
+
+      // Migrate v1.1 themes automatically to v2 (built-in templates are always read-only)
+      const builtInIds = new Set(DEFAULT_THEMES.map((t) => t.id));
+      const merged = [...DEFAULT_THEMES];
+      if (savedThemes && savedThemes.length > 0) {
+        for (const rawT of savedThemes) {
+          if (!rawT || rawT.deleted || builtInIds.has(rawT.id)) continue;
+          const v2 = migrateThemeToV2({ ...rawT, builtIn: false });
+          if (rawT.version !== 2) await setKey("themes", v2.id, v2);
+          merged.push(v2);
+        }
+      }
+      setThemes(merged);
       if (savedActiveThemes) setActiveThemeIds((prev) => ({ ...prev, ...savedActiveThemes }));
       if (savedAssets && savedAssets.length > 0) {
         const am = {};
@@ -249,7 +334,8 @@ export function AppProvider({ children }) {
   const buildShowPayload = useCallback((item, overrides = {}) => {
     const targetMode = overrides.mode || modeRef.current;
     const kind = item.kind || "scripture";
-    const activeTheme = getThemeForKind(kind);
+    const overrideTid = overrides.templateId || item.templateId || (item.songId ? songThemeOverridesRef.current[item.songId] : "");
+    const activeTheme = (overrideTid && themesRef.current.find((t) => t.id === overrideTid)) || getThemeForKind(kind);
     const layoutCfg = targetMode === "fullScreen" ? activeTheme.fullScreen : activeTheme.lowerThird;
     return {
       mode: targetMode,
@@ -258,6 +344,8 @@ export function AppProvider({ children }) {
       subtitle: item.subtitle || "",
       body: item.body || "",
       label: item.label || "",
+      author: item.author || "",
+      templateId: overrideTid || "",
       clearMode: overrides.clearMode || "none",
       animation: overrides.animation || layoutCfg?.entrance || styleRef.current.entrance || "slide-up",
       transition: overrides.transition || layoutCfg?.contentTransition || "fade",
@@ -402,9 +490,119 @@ export function AppProvider({ children }) {
 
   const previewStyle = useCallback((patch) => setStyleState((st) => ({ ...st, ...patch })), []);
 
-  // ---- Theme CRUD
+  // ---- Account sync (V1.2 §5.3)
+  const syncNow = useCallback(async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setSyncStatus("offline");
+      return { status: "offline" };
+    }
+    setSyncStatus("syncing");
+    const res = await runAccountSync({
+      style: styleRef.current,
+      activeThemeIds: activeThemeIdsRef.current,
+      favSongs: favSongsRef.current,
+      songStats: songStatsRef.current,
+      songThemeOverrides: songThemeOverridesRef.current,
+      customSongs: customSongsRef.current,
+      recent: recentRef.current,
+      pinned: pinnedRef.current,
+      savedTexts: savedTextsRef.current,
+      customThemes: themesRef.current.filter((t) => !t.builtIn),
+      updatedAt: localUpdatedAtRef.current,
+    });
+    setSyncStatus(res.status || "local");
+    if (res.syncedAt) setLastSyncedAt(res.syncedAt);
+    if (res.merged) {
+      if (res.merged.style) {
+        setStyleState(res.merged.style);
+        styleRef.current = res.merged.style;
+        setKey("settings", "style", res.merged.style);
+      }
+      if (res.merged.activeThemeIds) {
+        setActiveThemeIds(res.merged.activeThemeIds);
+        setKey("settings", "activeThemeIds", res.merged.activeThemeIds);
+      }
+      if (res.merged.favSongs) {
+        setFavSongs(res.merged.favSongs);
+        setKey("lists", "favSongs", res.merged.favSongs);
+      }
+      if (res.merged.songStats) {
+        setSongStats(res.merged.songStats);
+        setKey("lists", "songStats", res.merged.songStats);
+      }
+      if (res.merged.songThemeOverrides) {
+        setSongThemeOverrides(res.merged.songThemeOverrides);
+        setKey("lists", "songThemeOverrides", res.merged.songThemeOverrides);
+      }
+      if (res.merged.customSongs) {
+        setCustomSongs(res.merged.customSongs);
+        setKey("lists", "customSongs", res.merged.customSongs);
+      }
+      if (res.merged.recent) {
+        setRecent(res.merged.recent);
+        setKey("lists", "recent", res.merged.recent);
+      }
+      if (res.merged.pinned) {
+        setPinned(res.merged.pinned);
+        setKey("lists", "pinned", res.merged.pinned);
+      }
+      if (res.merged.savedTexts) {
+        setSavedTexts(res.merged.savedTexts);
+      }
+      if (res.merged.customThemes) {
+        const activeCustom = res.merged.customThemes.filter((t) => !t.deleted);
+        const nextThemes = [...DEFAULT_THEMES, ...activeCustom];
+        setThemes(nextThemes);
+        themesRef.current = nextThemes;
+      }
+      if (res.merged.downloadedAssets) {
+        setAssetsMap((m) => ({ ...m, ...res.merged.downloadedAssets }));
+      }
+      if (res.remoteChanged) {
+        setSyncNotice("Updated from another device.");
+        setTimeout(() => setSyncNotice(""), 6000);
+      }
+    }
+    return res;
+  }, []);
+
+  const markDirtyForSync = useCallback(() => {
+    const now = new Date().toISOString();
+    localUpdatedAtRef.current = now;
+    setKey("settings", "localUpdatedAt", now);
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      if (typeof navigator !== "undefined" && navigator.onLine) syncNow();
+    }, 3500);
+  }, [syncNow]);
+
+  // Run initial sync on boot & when connection returns
+  useEffect(() => {
+    if (!ready) return;
+    if (online) syncNow();
+    else setSyncStatus("offline");
+  }, [ready, online, syncNow]);
+
+  // ---- Theme CRUD (V1.2 §5.2 — built-ins read-only, unique names enforced)
   const saveTheme = useCallback(async (rawTheme) => {
-    const valid = validateTheme(rawTheme);
+    const builtInIds = new Set(DEFAULT_THEMES.map((t) => t.id));
+    if (rawTheme?.builtIn || builtInIds.has(rawTheme?.id)) {
+      throw new Error("Built-in templates cannot be overwritten. Save as a new template with a unique name.");
+    }
+    const trimmedName = String(rawTheme?.name || "").trim();
+    if (!trimmedName || trimmedName.length > 60) {
+      throw new Error("Template name must be 1–60 characters.");
+    }
+    if (isTemplateNameTaken(trimmedName, themesRef.current, rawTheme?.id)) {
+      throw new Error("That name already exists. Choose a different name.");
+    }
+    const valid = sanitizeTheme({
+      ...rawTheme,
+      name: trimmedName,
+      builtIn: false,
+      deleted: false,
+      updatedAt: new Date().toISOString(),
+    });
     await setKey("themes", valid.id, valid);
     setThemes((list) => {
       const idx = list.findIndex((t) => t.id === valid.id);
@@ -415,22 +613,37 @@ export function AppProvider({ children }) {
     pushStyle(styleRef.current, valid);
     if (liveRef.current) updateLive(liveRef.current, { force: true, immediate: true });
     broadcastState();
+    markDirtyForSync();
     return valid;
-  }, [pushStyle, updateLive, broadcastState]);
+  }, [pushStyle, updateLive, broadcastState, markDirtyForSync]);
 
   const deleteTheme = useCallback(async (id) => {
-    if (id.startsWith("default-")) return false;
-    await delKey("themes", id);
+    const target = themesRef.current.find((t) => t.id === id);
+    if (!target || target.builtIn || DEFAULT_THEMES.some((d) => d.id === id)) return false;
+    // Soft-delete tombstone for cross-device sync
+    await setKey("themes", id, { ...target, deleted: true, updatedAt: new Date().toISOString() });
     setThemes((list) => {
       const next = list.filter((t) => t.id !== id);
       themesRef.current = next;
       return next;
     });
     broadcastState();
+    markDirtyForSync();
     return true;
-  }, [broadcastState]);
+  }, [broadcastState, markDirtyForSync]);
+
+  const bumpThemeUse = useCallback((themeId) => {
+    setThemes((list) => {
+      const next = list.map((t) => (t.id === themeId ? { ...t, useCount: (t.useCount || 0) + 1 } : t));
+      themesRef.current = next;
+      const updated = next.find((t) => t.id === themeId);
+      if (updated && !updated.builtIn) setKey("themes", updated.id, updated);
+      return next;
+    });
+  }, []);
 
   const selectThemeForSlot = useCallback((slot, themeId) => {
+    bumpThemeUse(themeId);
     setActiveThemeIds((prev) => {
       const next = { ...prev, [slot]: themeId };
       activeThemeIdsRef.current = next;
@@ -439,9 +652,114 @@ export function AppProvider({ children }) {
       if (th) pushStyle(styleRef.current, th);
       if (liveRef.current) updateLive(liveRef.current, { force: true, immediate: true });
       broadcastState();
+      markDirtyForSync();
       return next;
     });
-  }, [pushStyle, updateLive, broadcastState]);
+  }, [bumpThemeUse, pushStyle, updateLive, broadcastState, markDirtyForSync]);
+
+  // ---- Saved Texts CRUD (V1.2 §5.1 — offline-first, max 300, title <= 100, body <= 10000)
+  const saveTextItem = useCallback(async (input) => {
+    const title = String(input?.title || "").trim().slice(0, 100);
+    const body = String(input?.body || "").slice(0, 10000);
+    if (!title) throw new Error("Title is required (1–100 characters).");
+    const activeCount = savedTextsRef.current.filter((t) => !t.deleted).length;
+    const isNew = !input.id || !savedTextsRef.current.some((t) => t.id === input.id);
+    if (isNew && activeCount >= 300) throw new Error("Maximum 300 saved texts per account reached.");
+    const now = new Date().toISOString();
+    const existing = savedTextsRef.current.find((t) => t.id === input.id);
+    const rec = {
+      id: input.id || `txt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title,
+      body,
+      tags: Array.isArray(input.tags) ? input.tags.map((x) => String(x).trim()).filter(Boolean).slice(0, 20) : (existing?.tags || []),
+      favourite: input.favourite !== undefined ? !!input.favourite : (existing?.favourite || false),
+      templateId: input.templateId !== undefined ? String(input.templateId || "") : (existing?.templateId || ""),
+      useCount: existing?.useCount || 0,
+      lastUsedAt: existing?.lastUsedAt || "",
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      deleted: false,
+    };
+    await setKey("savedTexts", rec.id, rec);
+    setSavedTexts((list) => {
+      const idx = list.findIndex((x) => x.id === rec.id);
+      const next = idx >= 0 ? list.map((x, i) => (i === idx ? rec : x)) : [rec, ...list];
+      savedTextsRef.current = next;
+      return next;
+    });
+    markDirtyForSync();
+    return rec;
+  }, [markDirtyForSync]);
+
+  const deleteTextItem = useCallback(async (id) => {
+    const existing = savedTextsRef.current.find((t) => t.id === id);
+    if (!existing) return;
+    const tomb = { ...existing, deleted: true, updatedAt: new Date().toISOString() };
+    await setKey("savedTexts", id, tomb);
+    setSavedTexts((list) => {
+      const next = list.map((x) => (x.id === id ? tomb : x));
+      savedTextsRef.current = next;
+      return next;
+    });
+    markDirtyForSync();
+  }, [markDirtyForSync]);
+
+  const toggleFavText = useCallback(async (id) => {
+    const existing = savedTextsRef.current.find((t) => t.id === id);
+    if (!existing) return;
+    const updated = { ...existing, favourite: !existing.favourite, updatedAt: new Date().toISOString() };
+    await setKey("savedTexts", id, updated);
+    setSavedTexts((list) => {
+      const next = list.map((x) => (x.id === id ? updated : x));
+      savedTextsRef.current = next;
+      return next;
+    });
+    markDirtyForSync();
+  }, [markDirtyForSync]);
+
+  const bumpTextUse = useCallback(async (id) => {
+    const existing = savedTextsRef.current.find((t) => t.id === id);
+    if (!existing) return;
+    const now = new Date().toISOString();
+    const updated = { ...existing, useCount: (existing.useCount || 0) + 1, lastUsedAt: now, updatedAt: now };
+    await setKey("savedTexts", id, updated);
+    setSavedTexts((list) => {
+      const next = list.map((x) => (x.id === id ? updated : x));
+      savedTextsRef.current = next;
+      return next;
+    });
+    markDirtyForSync();
+  }, [markDirtyForSync]);
+
+  // ---- Song stats & per-song template override (V1.2 §3.3 & §6)
+  const bumpSongUse = useCallback((songId) => {
+    if (!songId) return;
+    setSongStats((prev) => {
+      const cur = prev[songId] || { useCount: 0, lastUsedAt: "" };
+      const next = { ...prev, [songId]: { useCount: (cur.useCount || 0) + 1, lastUsedAt: new Date().toISOString() } };
+      songStatsRef.current = next;
+      setKey("lists", "songStats", next);
+      return next;
+    });
+    markDirtyForSync();
+  }, [markDirtyForSync]);
+
+  const setSongThemeOverride = useCallback((songId, themeId) => {
+    if (!songId) return;
+    setSongThemeOverrides((prev) => {
+      const next = { ...prev };
+      if (!themeId) delete next[songId];
+      else next[songId] = themeId;
+      songThemeOverridesRef.current = next;
+      setKey("lists", "songThemeOverrides", next);
+      return next;
+    });
+    markDirtyForSync();
+  }, [markDirtyForSync]);
+
+  const stepLive = useCallback((dir) => {
+    window.dispatchEvent(new CustomEvent("selah-dock-step", { detail: dir }));
+  }, []);
 
   // ---- OBS connection & protocol event listener
   const saveObsConf = useCallback((patch) => setObsConf((c) => { const n = { ...c, ...patch }; setKey("settings", "obs", n); return n; }), []);
@@ -672,16 +990,19 @@ export function AppProvider({ children }) {
   const value = {
     ready, obs: obs.current, obsConf, saveObsConf, obsStatus, obsError, connectObs, online,
     style, saveStyle, previewStyle,
-    themes, activeThemeIds, getThemeForKind, saveTheme, deleteTheme, selectThemeForSlot,
+    themes, activeThemeIds, getThemeForKind, saveTheme, deleteTheme, selectThemeForSlot, bumpThemeUse,
     assetsMap, saveAsset, streamAssetToOverlay,
     mode, setMode, live, liveFollow, setLiveFollow,
-    show, updateLive, takeLive, hide, clearText, blackout, logoScreen, emit,
+    show, updateLive, takeLive, hide, clearText, blackout, logoScreen, emit, stepLive,
     activeBibleId, setActiveBibleId,
     lyricsLinesPerSlide, setLyricsLinesPerSlide,
     scriptureRangeSplit, setScriptureRangeSplit,
     packs, bibles: packs.filter((p) => p.type === "bible"), songPacks: packs.filter((p) => p.type === "songpack"),
     manifest, updates, notices, installPack, rollbackPack, removePack, downloads, refreshManifest,
-    recent, addRecent, pinned, togglePin, favSongs, toggleFavSong, customSongs, addCustomSong, recentTexts, addRecentText,
+    recent, addRecent, pinned, togglePin, favSongs, toggleFavSong, songStats, bumpSongUse, songThemeOverrides, setSongThemeOverride,
+    customSongs, addCustomSong, recentTexts, addRecentText,
+    savedTexts: savedTexts.filter((t) => !t.deleted), saveTextItem, deleteTextItem, toggleFavText, bumpTextUse,
+    syncStatus, lastSyncedAt, syncNotice, syncNow,
     setupDone, finishSetup, theme, changeTheme,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
