@@ -142,6 +142,19 @@ input[type=range] { width: 100%; accent-color: var(--gold); }
 .verse:hover { background: var(--raised); }
 .verse.sel { border-color: var(--blue); background: rgba(5,80,193,.14); }
 .verse.live { border-color: var(--danger); }
+.list-item {
+  border: 1px solid transparent; border-radius: 8px; padding: 8px 10px;
+  background: transparent; color: var(--text); width: 100%;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.list-item:hover { background: var(--raised); }
+.list-item.active {
+  background: rgba(232, 184, 74, 0.16);
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--gold);
+}
 .verse .ref { font-family: var(--font-head); font-weight: 700; font-size: 18px; color: var(--gold); }
 .verse p { margin: 6px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .verse .hint { opacity: 0; font-size: 12px; color: var(--text-2); } .verse:hover .hint { opacity: 1; }
