@@ -28,19 +28,33 @@ export function PreviewPane({ pending }) {
   } = useApp();
 
   const item = pending ? { ...pending, mode } : live || { ...SAMPLE_VERSE, mode };
-  const previewTheme = getThemeForKind(item.kind || "scripture");
-  const slot = item.kind === "song" ? "songs" : item.kind === "text" ? "text" : "scripture";
+  const activeItem = live && liveFollow ? live : item;
+  const previewTheme =
+    (activeItem.templateId && themes.find((t) => t.id === activeItem.templateId)) ||
+    activeItem.theme ||
+    getThemeForKind(activeItem.kind || "scripture");
+  const slot = activeItem.kind === "song" ? "songs" : activeItem.kind === "text" ? "text" : "scripture";
   const canShow = !!pending;
   const isDifferentFromLive = live && pending && (live.title !== pending.title || live.body !== pending.body || live.mode !== mode);
 
   return (
-    <aside className="preview-pane" aria-label="Live preview">
+    <aside className="preview-pane" aria-label="Live broadcast preview">
       <div className="row between">
-        <h3 style={{ fontSize: 16 }}>Live preview</h3>
-        {live ? <span className="chip live"><span className="dot bad pulse" />On screen</span> : <span className="chip">Ready</span>}
+        <div className="row" style={{ gap: 6 }}>
+          <span className={`dot ${live ? "bad pulse" : "gold"}`} />
+          <h3 style={{ fontSize: 15, margin: 0 }}>Live Broadcast Preview</h3>
+        </div>
+        {live ? <span className="chip live"><span className="dot bad pulse" />On screen</span> : <span className="chip">PGM Ready</span>}
       </div>
 
-      <PreviewFrame item={live && liveFollow ? live : item} style={style} theme={previewTheme} assetsMap={assetsMap} />
+      <PreviewFrame
+        item={activeItem}
+        style={style}
+        theme={previewTheme}
+        assetsMap={assetsMap}
+        performanceMode={!!style.performanceMode}
+        reduceMotion={!!style.reduceMotion}
+      />
 
       <div className="col" style={{ gap: 6 }}>
         <span className="label">Display mode</span>

@@ -782,7 +782,11 @@ export function PreviewFrame({ item, style, theme = null, assetsMap = {}, paused
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(el.clientWidth / 1920));
+    const update = () => {
+      if (el.clientWidth > 0) setScale(el.clientWidth / 1920);
+    };
+    update();
+    const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);

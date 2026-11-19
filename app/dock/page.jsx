@@ -17,6 +17,9 @@ export default function Dock() {
   const [themeId, setThemeId] = useState("");
   const [themes, setThemes] = useState([]);
   const [recent, setRecent] = useState([]);
+  const [savedTexts, setSavedTexts] = useState([]);
+  const [quickTitle, setQuickTitle] = useState("");
+  const [quickBody, setQuickBody] = useState("");
 
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all");
@@ -68,6 +71,7 @@ export default function Dock() {
         if (d.themeId) setThemeId(d.themeId);
         if (Array.isArray(d.themes)) setThemes(d.themes);
         if (Array.isArray(d.recent)) setRecent(d.recent);
+        if (Array.isArray(d.savedTexts)) setSavedTexts(d.savedTexts);
       } else if (d.type === "selah:results") {
         if (d.reqId === pendingReqRef.current.id) {
           clearTimeout(pendingReqRef.current.timer);
@@ -206,8 +210,22 @@ export default function Dock() {
     );
   }
 
-  const displayList = q.trim() ? results : recent;
+  const displayList = q.trim() ? results : (scope === "text" ? savedTexts : recent);
   const activeItem = selected || displayList[0] || live;
+
+  const pushQuickText = (e) => {
+    e?.preventDefault();
+    const body = quickBody.trim();
+    if (!body) return;
+    const item = {
+      kind: "text",
+      title: quickTitle.trim(),
+      subtitle: "",
+      body,
+    };
+    setSelected(item);
+    cmd("takeLive", { item });
+  };
 
   return (
     <div className="dock" style={{ gap: 10 }}>
@@ -220,17 +238,54 @@ export default function Dock() {
           className="input"
           style={{ height: 42, fontSize: 13, paddingLeft: 42 }}
           maxLength={200}
-          placeholder="Search verse (Jn 3:16) or song…"
+          placeholder="Search verse (Jn 3:16), song, or text…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          aria-label="Search scripture and songs"
+          aria-label="Search scripture, songs, and text"
         />
       </div>
       <div className="tabs" role="tablist" style={{ gap: 2 }}>
-        {[["all", "All"], ["scripture", "Scripture"], ["songs", "Songs"]].map(([k, l]) => (
+        {[["all", "All"], ["scripture", "Scripture"], ["songs", "Songs"], ["text", "Text"]].map(([k, l]) => (
           <button key={k} role="tab" aria-selected={scope === k} onClick={() => setScope(k)} style={{ padding: "4px 10px", fontSize: 12 }}>{l}</button>
         ))}
       </div>
+
+      {/* Quick Text Push Live Composer inside OBS Dock (v1.2.1) */}
+      {scope === "text" && (
+        <form className="card raised col" style={{ gap: 6, padding: 8 }} onSubmit={pushQuickText}>
+          <input
+            className="input"
+            style={{ height: 34, fontSize: 12 }}
+            maxLength={100}
+            placeholder="Title (optional, e.g. Welcome / Offering)"
+            value={quickTitle}
+            onChange={(e) => setQuickTitle(e.target.value)}
+            aria-label="Quick text title"
+          />
+          <textarea
+            className="textarea"
+            style={{ minHeight: 62, fontSize: 12, padding: 8 }}
+            maxLength={2000}
+            placeholder="Type message to push live on display…"
+            value={quickBody}
+            onChange={(e) => setQuickBody(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") pushQuickText(e);
+            }}
+            aria-label="Quick text message"
+          />
+          <div className="row" style={{ gap: 6 }}>
+            <button type="submit" className="btn btn-primary btn-sm grow" disabled={!quickBody.trim()}>
+              <Icon name="play" size={14} /> Push Text Live
+            </button>
+            {(quickTitle || quickBody) && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setQuickTitle(""); setQuickBody(""); }}>
+                Clear
+              </button>
+            )}
+          </div>
+        </form>
+      )}
 
       {/* Results / Recent List */}
       <div className="col" style={{ gap: 6, flex: 1, overflow: "auto", minHeight: 120 }}>

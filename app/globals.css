@@ -119,11 +119,19 @@ input[type=range] { width: 100%; accent-color: var(--gold); }
 .preview-pane { background: var(--panel); border-left: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow: auto; }
 .page-title { font-size: 28px; font-weight: 600; }
 
-/* preview frame */
-.frame { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
-  background: radial-gradient(ellipse at 50% 20%, #3b3a52 0%, #14172a 60%), #080d1d; }
-.frame::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 10%, rgba(232,184,74,.25), transparent 55%); }
-.frame .scaler { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+/* preview frame (Live Broadcast Preview + Display Editor 16:9 stage) */
+.frame, .preview-box {
+  position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
+  background: radial-gradient(ellipse at 50% 20%, #3b3a52 0%, #14172a 60%), #080d1d;
+}
+.frame::before, .preview-box::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 70% 10%, rgba(232,184,74,.25), transparent 55%);
+  pointer-events: none;
+}
+.frame .scaler, .preview-box .preview-stage {
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0;
+}
 .show-btn { width: 100%; min-height: 64px; font-size: 22px; letter-spacing: .04em; }
 .show-btn.live { background: transparent; border: 2px solid var(--danger); color: var(--danger); box-shadow: 0 0 16px -2px rgba(255,92,112,.45); }
 

@@ -10,7 +10,7 @@ import { gunzipSync, unzipSync } from "fflate";
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 
 const STARTER_SAVED_TEXTS = [
   {
@@ -318,6 +318,10 @@ export function AppProvider({ children }) {
   const broadcastState = useCallback(() => {
     const biblesList = packsRef.current.filter((p) => p.type === "bible").map((b) => ({ id: b.id, code: b.code, name: b.name }));
     const themesList = themesRef.current.map((t) => ({ id: t.id, name: t.name, slot: t.slot }));
+    const savedTextsList = savedTextsRef.current
+      .filter((t) => !t.deleted)
+      .slice(0, 20)
+      .map((t) => ({ id: t.id, kind: "text", title: t.title, subtitle: "", body: t.body, templateId: t.templateId || "", favourite: !!t.favourite }));
     emit("selah:state", {
       live: liveRef.current,
       mode: modeRef.current,
@@ -327,6 +331,7 @@ export function AppProvider({ children }) {
       versions: biblesList,
       themes: themesList,
       recent: recentItems.current,
+      savedTexts: savedTextsList,
     });
   }, [emit]);
 
@@ -800,15 +805,19 @@ export function AppProvider({ children }) {
       } else if (d.type === "selah:asset-ack" && d.assetId) {
         ackedAssetsRef.current.add(d.assetId);
       } else if (d.type === "selah:search") {
-        // Dock remote search through app's IndexedDB packs (V1.1 §4.3)
+        // Dock remote search through app's IndexedDB packs + saved texts (V1.1 §4.3 + V1.2.1)
         const biblesList = packsRef.current.filter((p) => p.type === "bible");
         const songsList = packsRef.current.filter((p) => p.type === "songpack");
+        const allTexts = [
+          ...savedTextsRef.current.filter((t) => !t.deleted).map((t) => ({ id: t.id, title: t.title, body: t.body, templateId: t.templateId || "" })),
+          ...recentTextsRef.current,
+        ];
         const res = unifiedSearch({
           packs: biblesList,
           selectedPackId: d.version || activeBibleIdRef.current || biblesList[0]?.id,
           songPacks: songsList,
           customSongs: customSongsRef.current,
-          recentTexts: recentTextsRef.current,
+          recentTexts: allTexts,
           query: d.query || "",
           scope: d.scope || "all",
           limit: Math.min(20, Number(d.limit) || 20),

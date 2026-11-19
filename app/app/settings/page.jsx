@@ -133,7 +133,7 @@ export default function SettingsPage() {
       </div>
       <div className="card row between"><div><h3>Theme</h3><span className="muted">Dark is easier in a dim room.</span></div>
         <div className="seg" style={{ width: 220 }}><button aria-pressed={theme === "dark"} onClick={() => changeTheme("dark")}><Icon name="moon" size={14} /> Dark</button><button aria-pressed={theme === "light"} onClick={() => changeTheme("light")}><Icon name="sun" size={14} /> Light</button></div></div>
-      <div className="card"><h3>About</h3><span className="muted">Selah Live v1.2.0 · Free for churches.</span></div>
+      <div className="card"><h3>About</h3><span className="muted">Selah Live v1.2.1 · Free for churches.</span></div>
     </AppShell>
   );
 }
