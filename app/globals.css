@@ -212,9 +212,26 @@ input[type=range] { width: 100%; accent-color: var(--gold); }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } .grad-drift { animation: none; } }
 
 /* dock */
-.dock { min-height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 14px; background: var(--bg); }
-.dock-state { flex: 1; display: grid; place-content: center; justify-items: center; gap: 14px; text-align: center; padding: 24px; }
-.dock-state .big { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; font-size: 34px; background: var(--raised); }
+.dock {
+  height: 100vh; max-height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+  background: var(--bg);
+}
+.dock-head { flex: none; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.dock-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.dock-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.dock-controls { flex: none; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--border); padding-top: 6px; }
+.dock .btn { min-height: 30px; padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+.dock .seg button { min-height: 28px; padding: 3px 8px; font-size: 11px; }
+.dock .cselect-trigger { min-height: 30px; padding: 4px 8px; font-size: 12px; }
+.dock-state { flex: 1; display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 16px; }
+.dock-state .big { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; background: var(--raised); }
+
+/* Horizontal / short OBS bottom-dock layout (e.g. next to Audio Mixer) */
+@media (max-height: 460px) and (min-width: 480px) {
+  .dock-body { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr); gap: 10px; align-items: stretch; }
+  .dock-controls { border-top: 0; border-left: 1px solid var(--border); padding-top: 0; padding-left: 10px; justify-content: space-between; overflow-y: auto; }
+}
 
 @media (max-width: 1100px) { .shell { grid-template-columns: 72px minmax(0,1fr) 300px; } .nav a span.lbl { display: none; } .two, .songs { grid-template-columns: 1fr; } .hero, .grid3, .grid2 { grid-template-columns: 1fr; } }
 

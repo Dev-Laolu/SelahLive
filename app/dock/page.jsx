@@ -20,6 +20,7 @@ export default function Dock() {
   const [savedTexts, setSavedTexts] = useState([]);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickBody, setQuickBody] = useState("");
+  const [showHelp, setShowHelp] = useState(false);
 
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all");
@@ -148,17 +149,37 @@ export default function Dock() {
 
   const dotCls = state === "ok" ? "ok" : state === "noapp" || state === "starting" ? "warn" : "bad";
   const Head = (
-    <div className="row between">
-      <div className="row" style={{ gap: 8 }}>
-        <span className={`dot ${dotCls} ${state === "ok" ? "" : "pulse"}`} />
-        <b style={{ fontFamily: "var(--font-head)" }}>Selah Live</b>
-        {appVersion && <span className="muted mono" style={{ fontSize: 11 }}>v{appVersion}</span>}
-      </div>
+    <div className="row between" style={{ flexShrink: 0 }}>
       <div className="row" style={{ gap: 6 }}>
-        <span className="chip" style={{ fontSize: 11 }}>{state === "noobs" ? "OBS ✕" : "OBS ✓"}</span>
-        <a className="iconbtn" style={{ width: 32, height: 32 }} title="Open full app" href={`${typeof window !== "undefined" ? location.origin : ""}/app/scripture`} target="_blank" rel="noreferrer">
-          <Icon name="ext" size={15} />
+        <span className={`dot ${dotCls} ${state === "ok" ? "" : "pulse"}`} />
+        <b style={{ fontFamily: "var(--font-head)", fontSize: 13 }}>Selah Live</b>
+        {appVersion && <span className="muted mono" style={{ fontSize: 10 }}>v{appVersion}</span>}
+      </div>
+      <div className="row" style={{ gap: 4 }}>
+        <span className="chip" style={{ fontSize: 10, padding: "1px 6px" }}>{state === "noobs" ? "OBS ✕" : "OBS ✓"}</span>
+        <button type="button" className="iconbtn" style={{ width: 26, height: 26 }} title="How to connect to OBS" aria-label="OBS Connection Help" onClick={() => setShowHelp(true)}>
+          <Icon name="help" size={14} />
+        </button>
+        <a className="iconbtn" style={{ width: 26, height: 26 }} title="Open full app" href={`${typeof window !== "undefined" ? location.origin : ""}/app/overview`} target="_blank" rel="noreferrer">
+          <Icon name="ext" size={14} />
         </a>
+      </div>
+    </div>
+  );
+
+  const HelpOverlay = showHelp && (
+    <div className="modal-bg" style={{ padding: 10 }} role="dialog" aria-modal="true" aria-label="OBS Help" onClick={(e) => e.target === e.currentTarget && setShowHelp(false)}>
+      <div className="modal col" style={{ gap: 8, padding: 14, maxWidth: 380, fontSize: 12 }}>
+        <div className="row between">
+          <b style={{ fontSize: 13 }}>How to connect to OBS</b>
+          <button type="button" className="iconbtn" style={{ width: 24, height: 24 }} onClick={() => setShowHelp(false)}><Icon name="x" size={14} /></button>
+        </div>
+        <ol className="muted col" style={{ gap: 5, margin: 0, paddingLeft: 16, lineHeight: 1.45 }}>
+          <li>In OBS, open <b>Tools → WebSocket Server Settings</b> and enable WebSocket (port <code className="mono">4455</code>).</li>
+          <li>Copy the <b>Server Password</b> and paste it in Selah Live <b>Settings</b>, then click <b>Connect</b>.</li>
+          <li>Keep the Selah Live app open (minimized is fine) so this dock stays connected.</li>
+        </ol>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowHelp(false)}>Got it</button>
       </div>
     </div>
   );
@@ -177,6 +198,7 @@ export default function Dock() {
             <li>Paste it as this dock's URL in OBS.</li>
           </ol>
         </div>
+        {HelpOverlay}
       </div>
     );
   }
@@ -185,10 +207,11 @@ export default function Dock() {
       <div className="dock">{Head}
         <div className="dock-state">
           <div className="big" style={{ color: "var(--warn)" }}><Icon name="alert" /></div>
-          <h2 style={{ fontSize: 20 }}>Can't reach OBS</h2>
-          <p className="muted" style={{ margin: 0 }}>Check that WebSocket is enabled in OBS under Tools → WebSocket Server Settings.</p>
-          <span className="muted" style={{ fontSize: 12 }}>Retrying automatically…</span>
+          <h2 style={{ fontSize: 18 }}>Can't reach OBS</h2>
+          <p className="muted" style={{ margin: 0, fontSize: 12 }}>Check that WebSocket is enabled in OBS under Tools → WebSocket Server Settings.</p>
+          <span className="muted" style={{ fontSize: 11 }}>Retrying automatically…</span>
         </div>
+        {HelpOverlay}
       </div>
     );
   }
@@ -197,15 +220,16 @@ export default function Dock() {
       <div className="dock">{Head}
         <div className="dock-state">
           <div className="big muted"><Icon name={state === "starting" ? "loader" : "pause"} className={state === "starting" ? "spin" : ""} /></div>
-          <h2 style={{ fontSize: 20 }}>{state === "starting" ? "Connecting…" : "Selah Live isn't running"}</h2>
+          <h2 style={{ fontSize: 18 }}>{state === "starting" ? "Connecting…" : "Selah Live isn't running"}</h2>
           {state === "noapp" && (
             <>
-              <p className="muted" style={{ margin: 0 }}>Open the app to continue.</p>
-              <a className="btn btn-primary" href={`${location.origin}/app/scripture`} target="_blank" rel="noreferrer">Open app</a>
-              <span className="muted" style={{ fontSize: 12 }}>Reconnects automatically</span>
+              <p className="muted" style={{ margin: 0, fontSize: 12 }}>Open the app to continue.</p>
+              <a className="btn btn-primary" href={`${location.origin}/app/overview`} target="_blank" rel="noreferrer">Open app</a>
+              <span className="muted" style={{ fontSize: 11 }}>Reconnects automatically</span>
             </>
           )}
         </div>
+        {HelpOverlay}
       </div>
     );
   }
@@ -228,161 +252,172 @@ export default function Dock() {
   };
 
   return (
-    <div className="dock" style={{ gap: 10 }}>
-      {Head}
-
-      {/* Smart Search Bar + Scope */}
-      <div className="search">
-        <Icon name="search" size={18} />
-        <input
-          className="input"
-          style={{ height: 42, fontSize: 13, paddingLeft: 42 }}
-          maxLength={200}
-          placeholder="Search verse (Jn 3:16), song, or text…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          aria-label="Search scripture, songs, and text"
-        />
-      </div>
-      <div className="tabs" role="tablist" style={{ gap: 2 }}>
-        {[["all", "All"], ["scripture", "Scripture"], ["songs", "Songs"], ["text", "Text"]].map(([k, l]) => (
-          <button key={k} role="tab" aria-selected={scope === k} onClick={() => setScope(k)} style={{ padding: "4px 10px", fontSize: 12 }}>{l}</button>
-        ))}
-      </div>
-
-      {/* Quick Text Push Live Composer inside OBS Dock (v1.2.1) */}
-      {scope === "text" && (
-        <form className="card raised col" style={{ gap: 6, padding: 8 }} onSubmit={pushQuickText}>
-          <input
-            className="input"
-            style={{ height: 34, fontSize: 12 }}
-            maxLength={100}
-            placeholder="Title (optional, e.g. Welcome / Offering)"
-            value={quickTitle}
-            onChange={(e) => setQuickTitle(e.target.value)}
-            aria-label="Quick text title"
-          />
-          <textarea
-            className="textarea"
-            style={{ minHeight: 62, fontSize: 12, padding: 8 }}
-            maxLength={2000}
-            placeholder="Type message to push live on display…"
-            value={quickBody}
-            onChange={(e) => setQuickBody(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") pushQuickText(e);
-            }}
-            aria-label="Quick text message"
-          />
-          <div className="row" style={{ gap: 6 }}>
-            <button type="submit" className="btn btn-primary btn-sm grow" disabled={!quickBody.trim()}>
-              <Icon name="play" size={14} /> Push Text Live
-            </button>
-            {(quickTitle || quickBody) && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setQuickTitle(""); setQuickBody(""); }}>
-                Clear
-              </button>
-            )}
+    <div className="dock">
+      {/* Fixed Top Navbar: Status + Search + Scope Tabs */}
+      <div className="dock-head">
+        {Head}
+        <div className="row" style={{ gap: 6 }}>
+          <div className="search grow">
+            <Icon name="search" size={15} style={{ left: 10 }} />
+            <input
+              className="input"
+              style={{ height: 32, fontSize: 12, paddingLeft: 32 }}
+              maxLength={200}
+              placeholder="Search verse (Jn 3:16), song, or text…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              aria-label="Search scripture, songs, and text"
+            />
           </div>
-        </form>
-      )}
-
-      {/* Results / Recent List */}
-      <div className="col" style={{ gap: 6, flex: 1, overflow: "auto", minHeight: 120 }}>
-        {searchBusy && <span className="muted" style={{ fontSize: 12 }}>Searching…</span>}
-        {searchTimeout && <div className="banner warn" style={{ padding: 8, fontSize: 12 }}><Icon name="alert" size={15} />App didn't answer. Check that Selah Live is open.</div>}
-        {!searchBusy && !searchTimeout && displayList.length === 0 && (
-          <span className="muted" style={{ fontSize: 12 }}>{q.trim() ? "No matches found." : "Type a verse or song above, or show something in the app."}</span>
-        )}
-        {displayList.map((r, i) => {
-          const isSel = selected && selected.title === r.title && selected.body === r.body;
-          const isLiveRow = live && live.title === r.title && live.body === r.body;
-          return (
-            <button
-              key={r.id || i}
-              className={`verse ${isSel ? "sel" : ""} ${isLiveRow ? "live" : ""}`}
-              style={{ padding: "8px 10px" }}
-              onClick={() => {
-                setSelected(r);
-                cmd("select", { item: r });
-              }}
-              onDoubleClick={() => {
-                setSelected(r);
-                cmd("takeLive", { item: r });
-              }}
-            >
-              <div className="row between" style={{ gap: 6 }}>
-                <span className="ref" style={{ fontSize: 14 }}>{r.title}{r.label ? ` · ${r.label}` : ""}</span>
-                <span className="muted" style={{ fontSize: 11 }}>{r.subtitle}</span>
-              </div>
-              <p style={{ fontSize: 12, marginTop: 2 }}>{r.body}</p>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Now Live Card */}
-      <div className="card raised" style={{ padding: "8px 10px" }}>
-        <div className="row between" style={{ marginBottom: 2 }}>
-          <span className="label">Now live</span>
-          {live ? <span className="chip live" style={{ padding: "1px 8px", fontSize: 11 }}><span className="dot bad pulse" />Live</span> : <span className="muted" style={{ fontSize: 11 }}>Hidden</span>}
+          <div className="tabs" role="tablist" style={{ gap: 0, borderBottom: 0, flexShrink: 0 }}>
+            {[["all", "All"], ["scripture", "Bible"], ["songs", "Songs"], ["text", "Text"]].map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={scope === k} onClick={() => setScope(k)} style={{ padding: "4px 7px", fontSize: 11 }}>{l}</button>
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: 12, fontWeight: 600 }} className="gold">{live ? (live.clearMode === "blackout" ? "Blackout" : live.clearMode === "logoScreen" ? "Logo screen" : live.title || "On screen") : "Nothing on screen"}</div>
       </div>
 
-      {/* Primary Show / Take Live / Hide + Prev / Next */}
-      <div className="row" style={{ gap: 8 }}>
-        {live && !follow && activeItem ? (
-          <button className="btn btn-primary grow" onClick={() => cmd("takeLive", { item: activeItem })}>TAKE LIVE</button>
-        ) : (
-          <button className="btn btn-primary grow" disabled={!activeItem} onClick={() => activeItem && cmd("show", { item: activeItem })}>SHOW</button>
-        )}
-        <button className={`btn grow ${live ? "btn-danger" : "btn-secondary"}`} onClick={() => cmd("hide")}>HIDE</button>
-      </div>
-      <div className="row between" style={{ gap: 8 }}>
-        <button className="btn btn-secondary btn-sm grow" onClick={() => cmd("prev")}><Icon name="left" size={15} />Prev</button>
-        <button className="btn btn-secondary btn-sm grow" onClick={() => cmd("next")}>Next<Icon name="right" size={15} /></button>
+      {/* Main Body: switches to 2-column grid when docked horizontally at the bottom of OBS */}
+      <div className="dock-body">
+        <div className="dock-scroll">
+          {/* Quick Text Push Live Composer inside OBS Dock (v1.2.1) */}
+          {scope === "text" && (
+            <form className="card raised col" style={{ gap: 5, padding: 7 }} onSubmit={pushQuickText}>
+              <input
+                className="input"
+                style={{ height: 28, fontSize: 11 }}
+                maxLength={100}
+                placeholder="Title (optional, e.g. Welcome / Offering)"
+                value={quickTitle}
+                onChange={(e) => setQuickTitle(e.target.value)}
+                aria-label="Quick text title"
+              />
+              <textarea
+                className="textarea"
+                style={{ minHeight: 46, fontSize: 11, padding: 6 }}
+                maxLength={2000}
+                placeholder="Type message to push live on display…"
+                value={quickBody}
+                onChange={(e) => setQuickBody(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") pushQuickText(e);
+                }}
+                aria-label="Quick text message"
+              />
+              <div className="row" style={{ gap: 6 }}>
+                <button type="submit" className="btn btn-primary grow" disabled={!quickBody.trim()}>
+                  <Icon name="play" size={13} /> Push Text Live
+                </button>
+                {(quickTitle || quickBody) && (
+                  <button type="button" className="btn btn-ghost" onClick={() => { setQuickTitle(""); setQuickBody(""); }}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+
+          {/* Results / Recent / Saved Texts List */}
+          {searchBusy && <span className="muted" style={{ fontSize: 11 }}>Searching…</span>}
+          {searchTimeout && <div className="banner warn" style={{ padding: 6, fontSize: 11 }}><Icon name="alert" size={14} />App didn't answer. Check that Selah Live is open.</div>}
+          {!searchBusy && !searchTimeout && displayList.length === 0 && (
+            <span className="muted" style={{ fontSize: 11 }}>{q.trim() ? "No matches found." : scope === "text" ? "Type a message above or save texts in the app." : "Type a verse or song above, or show something in the app."}</span>
+          )}
+          {displayList.map((r, i) => {
+            const isSel = selected && selected.title === r.title && selected.body === r.body;
+            const isLiveRow = live && live.title === r.title && live.body === r.body;
+            return (
+              <button
+                key={r.id || i}
+                className={`verse ${isSel ? "sel" : ""} ${isLiveRow ? "live" : ""}`}
+                style={{ padding: "6px 8px" }}
+                onClick={() => {
+                  setSelected(r);
+                  cmd("select", { item: r });
+                }}
+                onDoubleClick={() => {
+                  setSelected(r);
+                  cmd("takeLive", { item: r });
+                }}
+              >
+                <div className="row between" style={{ gap: 6 }}>
+                  <span className="ref" style={{ fontSize: 12 }}>{r.title}{r.label ? ` · ${r.label}` : ""}</span>
+                  <span className="muted" style={{ fontSize: 10 }}>{r.subtitle}</span>
+                </div>
+                <p style={{ fontSize: 11, marginTop: 2 }}>{r.body}</p>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Fixed Compact Control Deck */}
+        <div className="dock-controls">
+          <div className="row between" style={{ gap: 6, padding: "4px 8px", background: "var(--raised)", borderRadius: 8 }}>
+            <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, fontWeight: 600 }} className="gold">
+              {live ? (live.clearMode === "blackout" ? "Blackout" : live.clearMode === "logoScreen" ? "Logo screen" : live.title || "On screen") : "Nothing on screen"}
+            </div>
+            {live ? <span className="chip live" style={{ padding: "0px 6px", fontSize: 10 }}><span className="dot bad pulse" />Live</span> : <span className="muted" style={{ fontSize: 10 }}>Hidden</span>}
+          </div>
+
+          {/* Single-row compact Show / Hide / Prev / Next */}
+          <div className="row" style={{ gap: 5 }}>
+            {live && !follow && activeItem ? (
+              <button className="btn btn-primary grow" onClick={() => cmd("takeLive", { item: activeItem })}>TAKE LIVE</button>
+            ) : (
+              <button className="btn btn-primary grow" disabled={!activeItem} onClick={() => activeItem && cmd("show", { item: activeItem })}>SHOW</button>
+            )}
+            <button className={`btn grow ${live ? "btn-danger" : "btn-secondary"}`} onClick={() => cmd("hide")}>HIDE</button>
+            <button className="btn btn-secondary" title="Previous" aria-label="Previous" onClick={() => cmd("prev")}><Icon name="left" size={14} /></button>
+            <button className="btn btn-secondary" title="Next" aria-label="Next" onClick={() => cmd("next")}><Icon name="right" size={14} /></button>
+          </div>
+
+          {/* Compact Mode + Live Follow on one line */}
+          <div className="row between" style={{ gap: 6 }}>
+            <div className="seg grow" role="group" aria-label="Display mode">
+              <button aria-pressed={mode === "lowerThird"} onClick={() => { setMode("lowerThird"); cmd("setMode", { mode: "lowerThird" }); }}>Lower 3rd</button>
+              <button aria-pressed={mode === "fullScreen"} onClick={() => { setMode("fullScreen"); cmd("setMode", { mode: "fullScreen" }); }}>Full</button>
+            </div>
+            <div className="row" style={{ gap: 5, flexShrink: 0 }}>
+              <label id="dock-follow" style={{ fontSize: 11 }} className="muted">Follow</label>
+              <button type="button" className="toggle" style={{ transform: "scale(0.85)" }} role="switch" aria-checked={follow} aria-labelledby="dock-follow" onClick={() => { const next = !follow; setFollow(next); cmd("setFollow", { follow: next }); }} />
+            </div>
+          </div>
+
+          {/* Compact Version & Theme Dropdowns */}
+          {(versions.length > 0 || themes.length > 0) && (
+            <div className="row" style={{ gap: 5 }}>
+              {versions.length > 0 && (
+                <Select
+                  searchable
+                  ariaLabel="Bible version"
+                  className="grow"
+                  value={version}
+                  onChange={(v) => { setVersion(v); cmd("setVersion", { version: v }); }}
+                  options={versions.map((v) => ({ value: v.id, label: v.code, sub: v.name }))}
+                />
+              )}
+              {themes.length > 0 && (
+                <Select
+                  ariaLabel="Overlay theme"
+                  className="grow"
+                  value={themeId}
+                  onChange={(tid) => { setThemeId(tid); cmd("setTheme", { themeId: tid }); }}
+                  options={themes.map((t) => ({ value: t.id, label: t.name }))}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Compact Clear Controls */}
+          <div className="row" style={{ gap: 4 }}>
+            <button className="btn btn-ghost grow" style={{ fontSize: 11, minHeight: 26 }} onClick={() => cmd("clearText")}>Clear text</button>
+            <button className="btn btn-ghost grow" style={{ fontSize: 11, minHeight: 26 }} onClick={() => cmd("blackout")}>Blackout</button>
+            <button className="btn btn-ghost grow" style={{ fontSize: 11, minHeight: 26 }} onClick={() => cmd("logoScreen")}>Logo</button>
+          </div>
+        </div>
       </div>
 
-      {/* Mode + Live Follow */}
-      <div className="seg" role="group" aria-label="Display mode">
-        <button aria-pressed={mode === "lowerThird"} onClick={() => { setMode("lowerThird"); cmd("setMode", { mode: "lowerThird" }); }}>Lower third</button>
-        <button aria-pressed={mode === "fullScreen"} onClick={() => { setMode("fullScreen"); cmd("setMode", { mode: "fullScreen" }); }}>Full screen</button>
-      </div>
-      <div className="row between" style={{ fontSize: 12 }}>
-        <label id="dock-follow">Live follow</label>
-        <button type="button" className="toggle" role="switch" aria-checked={follow} aria-labelledby="dock-follow" onClick={() => { const next = !follow; setFollow(next); cmd("setFollow", { follow: next }); }} />
-      </div>
-
-      {/* Styled Version & Theme Dropdowns */}
-      <div className="row" style={{ gap: 6 }}>
-        {versions.length > 0 && (
-          <Select
-            searchable
-            ariaLabel="Bible version"
-            className="grow"
-            value={version}
-            onChange={(v) => { setVersion(v); cmd("setVersion", { version: v }); }}
-            options={versions.map((v) => ({ value: v.id, label: v.code, sub: v.name }))}
-          />
-        )}
-        {themes.length > 0 && (
-          <Select
-            ariaLabel="Overlay theme"
-            className="grow"
-            value={themeId}
-            onChange={(tid) => { setThemeId(tid); cmd("setTheme", { themeId: tid }); }}
-            options={themes.map((t) => ({ value: t.id, label: t.name }))}
-          />
-        )}
-      </div>
-
-      {/* Clear Controls */}
-      <div className="row" style={{ gap: 6 }}>
-        <button className="btn btn-ghost btn-sm grow" onClick={() => cmd("clearText")}>Clear text</button>
-        <button className="btn btn-ghost btn-sm grow" onClick={() => cmd("blackout")}>Blackout</button>
-        <button className="btn btn-ghost btn-sm grow" onClick={() => cmd("logoScreen")}>Logo</button>
-      </div>
+      {HelpOverlay}
     </div>
   );
 }

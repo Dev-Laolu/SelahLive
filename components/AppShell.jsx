@@ -144,15 +144,50 @@ function Notifications({ onClose }) {
   );
 }
 
+function ObsHelpModal({ onClose }) {
+  return (
+    <div className="modal-bg" role="dialog" aria-modal="true" aria-label="How to connect Selah Live to OBS" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal col" style={{ gap: 14, maxWidth: 560 }}>
+        <div className="row between">
+          <div className="row" style={{ gap: 8 }}>
+            <Icon name="help" size={20} className="gold" />
+            <h3 style={{ margin: 0 }}>How to connect Selah Live to OBS</h3>
+          </div>
+          <button className="iconbtn" aria-label="Close help" onClick={onClose}><Icon name="x" size={18} /></button>
+        </div>
+
+        <ol className="col" style={{ gap: 10, margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.5 }}>
+          <li>Open <b>OBS Studio</b> (version 28 or newer).</li>
+          <li>In OBS, click <b>Tools → WebSocket Server Settings</b>.</li>
+          <li>Check <b>Enable WebSocket server</b> (keep Server Port <code className="mono">4455</code>), click <b>Show Connect Info</b>, and copy the <b>Server Password</b>.</li>
+          <li>In Selah Live, open <b>Settings</b>, paste the password under <b>OBS WebSocket password</b>, and click <b>Connect</b>.</li>
+          <li>Selah Live automatically creates the <b>Selah Live Overlay</b> Browser Source (1920×1080) in your active OBS scene.</li>
+          <li><b>Optional OBS Dock:</b> Copy your <b>Dock link</b> in Settings, then in OBS go to <b>Docks → Custom Browser Docks…</b>, name it <b>Selah Live</b>, paste the link, and click <b>Apply</b>.</li>
+        </ol>
+
+        <div className="banner ok" style={{ fontSize: 13 }}>
+          <Icon name="bolt" size={16} />
+          <span><b>Tip:</b> Keep Selah Live open (minimized is fine) during your service so the overlay and OBS dock stay connected.</span>
+        </div>
+
+        <div className="row wrap" style={{ justifyContent: "flex-end", gap: 8 }}>
+          <Link href="/setup" className="btn btn-secondary btn-sm" onClick={onClose}>Re-run Setup Wizard</Link>
+          <Link href="/app/settings" className="btn btn-primary btn-sm" onClick={onClose}>Open OBS Settings</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AppShell({ children, pending, preview = true }) {
   const path = usePathname(); const router = useRouter();
   const { ready, obsStatus, live, online, updates, setupDone, hide, notices, manifest } = useApp();
   const { user, logOut } = useAuth();
-  const [bell, setBell] = useState(false); const [menu, setMenu] = useState(false);
+  const [bell, setBell] = useState(false); const [menu, setMenu] = useState(false); const [help, setHelp] = useState(false);
 
   useEffect(() => { if (user === null) router.replace("/login"); }, [user, router]);
   useEffect(() => { if (ready && user && !setupDone && path !== "/app/settings") router.replace("/setup"); }, [ready, user, setupDone, path, router]);
-  useEffect(() => { const k = (e) => { if (e.key === "Escape" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { hide(); setBell(false); } }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [hide]);
+  useEffect(() => { const k = (e) => { if (e.key === "Escape" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { hide(); setBell(false); setHelp(false); } }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [hide]);
 
   if (!ready || user === undefined) return <div className="auth-bg"><Logo size={48} stacked /></div>;
   const obsChip = obsStatus === "connected" ? <span className="chip ok"><Icon name="checkc" size={14} />OBS connected</span>
@@ -167,6 +202,9 @@ export default function AppShell({ children, pending, preview = true }) {
           {!online && <span className="chip warn"><Icon name="wifioff" size={14} />Offline</span>}
           {obsChip}
           {live && <span className="chip live"><span className="dot bad pulse" />Live: {live.clearMode === "blackout" ? "Blackout" : live.clearMode === "logoScreen" ? "Logo" : live.title || "On screen"}</span>}
+          <button className="btn btn-ghost btn-sm" aria-label="OBS Connection Help" title="How to connect to OBS" onClick={() => setHelp(true)} style={{ gap: 5 }}>
+            <Icon name="help" size={17} /><span>Help</span>
+          </button>
           <button className="iconbtn" aria-label="Notifications" onClick={() => setBell((b) => !b)}><Icon name="bell" size={20} />{notices.length > 0 && <span className="dot gold" style={{ position: "absolute", top: 10, right: 10 }} />}</button>
           <div style={{ position: "relative" }}>
             <button className="iconbtn" aria-label="Account menu" onClick={() => setMenu((m) => !m)} style={{ background: "var(--gold)", color: "var(--on-gold)", borderRadius: "50%", width: 36, height: 36 }}><Icon name="user" size={18} /></button>
@@ -200,6 +238,7 @@ export default function AppShell({ children, pending, preview = true }) {
       </main>
       {preview && <PreviewPane pending={pending} />}
       {bell && <Notifications onClose={() => setBell(false)} />}
+      {help && <ObsHelpModal onClose={() => setHelp(false)} />}
     </div>
   );
 }
