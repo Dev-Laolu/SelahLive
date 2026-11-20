@@ -13,6 +13,7 @@ const NAV = [
   ["songs", "Song packs", "music"],
   ["rel", "Releases and notifications", "bell"],
   ["users", "Users", "users"],
+  ["helpdesk", "Help Desk", "help"],
   ["audit", "Audit log", "file"],
   ["set", "Settings", "sliders"],
 ];
@@ -1620,6 +1621,123 @@ function AdminLoginForm({ initialNotice = "", onLoggedIn }) {
   );
 }
 
+function SupportTab() {
+  const toast = useToast();
+  const [messages, setMessages] = useState(null);
+  const [filter, setFilter] = useState("open"); // open | resolved | all
+  const [notes, setNotes] = useState({});
+  const [err, setErr] = useState("");
+  const [busyId, setBusyId] = useState("");
+
+  const load = () => {
+    authFetch("/api/admin/support")
+      .then((r) => setMessages(r.messages || []))
+      .catch((e) => setErr(e.message));
+  };
+  useEffect(() => { load(); }, []);
+
+  const act = async (id, action) => {
+    setBusyId(id);
+    setErr("");
+    try {
+      const res = await authFetch("/api/admin/support", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, action, adminNote: notes[id] ?? "" }),
+      });
+      setMessages(res.messages || []);
+      toast(action === "resolve" ? "Ticket marked as resolved." : action === "reopen" ? "Ticket reopened." : "Ticket deleted.");
+    } catch (e) {
+      setErr(e.message);
+    }
+    setBusyId("");
+  };
+
+  const list = (messages || []).filter((m) => (filter === "all" ? true : m.status === filter));
+  const openCount = (messages || []).filter((m) => m.status === "open").length;
+
+  return (
+    <div className="col" style={{ gap: 18 }}>
+      <div className="row between wrap" style={{ gap: 10 }}>
+        <div className="row" style={{ gap: 10 }}>
+          <h1 className="page-title" style={{ margin: 0 }}>Help Desk</h1>
+          {openCount > 0 && <span className="chip warn">{openCount} open</span>}
+        </div>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <div className="seg" role="tablist">
+            {[["open", `Open (${openCount})`], ["resolved", "Resolved"], ["all", "All"]].map(([k, l]) => (
+              <button key={k} aria-pressed={filter === k} onClick={() => setFilter(k)}>{l}</button>
+            ))}
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={load}><Icon name="refresh" size={14} />Refresh</button>
+        </div>
+      </div>
+
+      {err && <div className="banner bad"><Icon name="alertc" size={18} />{err}</div>}
+
+      {!messages ? (
+        <div className="skeleton" style={{ height: 120 }} />
+      ) : list.length === 0 ? (
+        <div className="card empty">
+          <Icon name="help" />
+          <b>No {filter === "all" ? "" : filter + " "}help desk messages</b>
+          <span>Messages users send from the Help button in Selah Live appear here.</span>
+        </div>
+      ) : (
+        <div className="col" style={{ gap: 12 }}>
+          {list.map((m) => (
+            <div key={m.id} className="card col" style={{ gap: 10 }}>
+              <div className="row between wrap" style={{ gap: 8 }}>
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <span className={`chip ${m.status === "open" ? "warn" : "ok"}`}>{m.status === "open" ? "Open" : "Resolved"}</span>
+                  <span className="chip">{m.category}</span>
+                  <b>{m.subject || "Help request"}</b>
+                </div>
+                <span className="muted mono" style={{ fontSize: 12 }}>{fmtDate(m.createdAt)} · {m.id}</span>
+              </div>
+
+              <div className="muted" style={{ fontSize: 13 }}>
+                From: <b style={{ color: "var(--text)" }}>{m.name}</b> {m.email && `(${m.email})`} {m.churchName && `· ${m.churchName}`} {m.page && `· Page: ${m.page}`}
+              </div>
+
+              <div className="card raised" style={{ whiteSpace: "pre-line", fontSize: 14, lineHeight: 1.5 }}>
+                {m.message}
+              </div>
+
+              <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+                <input
+                  className="input grow"
+                  style={{ minWidth: 220 }}
+                  placeholder="Optional admin resolution note…"
+                  value={notes[m.id] !== undefined ? notes[m.id] : (m.adminNote || "")}
+                  onChange={(e) => setNotes((n) => ({ ...n, [m.id]: e.target.value }))}
+                />
+                {m.status === "open" ? (
+                  <button className="btn btn-primary btn-sm" disabled={busyId === m.id} onClick={() => act(m.id, "resolve")}>
+                    <Icon name="check" size={15} />Mark Resolved
+                  </button>
+                ) : (
+                  <button className="btn btn-secondary btn-sm" disabled={busyId === m.id} onClick={() => act(m.id, "reopen")}>
+                    Reopen
+                  </button>
+                )}
+                {m.email && (
+                  <a className="btn btn-secondary btn-sm" href={`mailto:${encodeURIComponent(m.email)}?subject=${encodeURIComponent(`Re: ${m.subject || "Selah Live Support"}`)}`}>
+                    Reply via Email
+                  </a>
+                )}
+                <button className="btn btn-danger btn-sm" disabled={busyId === m.id} onClick={() => act(m.id, "delete")}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
   const [tab, setTab] = useState("dash");
   const [adminUser, setAdminUser] = useState(undefined); // undefined = loading, null = signed out
@@ -1718,6 +1836,7 @@ export default function Admin() {
         {tab === "songs" && <SongsTab />}
         {tab === "rel" && <ReleasesTab />}
         {tab === "users" && <UsersTab />}
+        {tab === "helpdesk" && <SupportTab />}
         {tab === "audit" && <AuditTab />}
         {tab === "set" && <SettingsTab />}
       </main>

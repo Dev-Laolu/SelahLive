@@ -57,6 +57,20 @@ async function syncUserFirestore(u, fallbackName = "") {
         lastActiveAt: serverTimestamp(),
       });
     }
+    // Also ping server analytics so real user activity is recorded in both Firestore & Neon
+    if (typeof fetch !== "undefined" && navigator.onLine) {
+      fetch("/api/analytics", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          event: "app_open",
+          uid: u.uid,
+          email: u.email,
+          name,
+          churchName: style?.churchName || "",
+        }),
+      }).catch(() => {});
+    }
   } catch { }
 }
 

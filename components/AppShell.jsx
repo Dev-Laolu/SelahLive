@@ -144,36 +144,143 @@ function Notifications({ onClose }) {
   );
 }
 
-function ObsHelpModal({ onClose }) {
+function ObsHelpModal({ onClose, user, churchName, currentPath }) {
+  const [tab, setTab] = useState("guide"); // guide | ticket
+  const [category, setCategory] = useState("OBS Connection");
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sentId, setSentId] = useState("");
+  const [err, setErr] = useState("");
+
+  const submitTicket = async (e) => {
+    e.preventDefault();
+    if (message.trim().length < 5) {
+      setErr("Please describe your issue (at least 5 characters).");
+      return;
+    }
+    setSending(true);
+    setErr("");
+    try {
+      const r = await fetch("/api/support", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          uid: user?.uid || "",
+          name: user?.name || "",
+          email: user?.email || "",
+          churchName: churchName || "",
+          category,
+          subject: subject.trim(),
+          message: message.trim(),
+          page: currentPath || "",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Could not send message.");
+      setSentId(data.id || "sent");
+      setSubject("");
+      setMessage("");
+    } catch (er) {
+      setErr(er.message || "Could not send message. Check your internet connection.");
+    }
+    setSending(false);
+  };
+
   return (
-    <div className="modal-bg" role="dialog" aria-modal="true" aria-label="How to connect Selah Live to OBS" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal col" style={{ gap: 14, maxWidth: 560 }}>
+    <div className="modal-bg" role="dialog" aria-modal="true" aria-label="Help & Support" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal col" style={{ gap: 14, maxWidth: 580 }}>
         <div className="row between">
           <div className="row" style={{ gap: 8 }}>
             <Icon name="help" size={20} className="gold" />
-            <h3 style={{ margin: 0 }}>How to connect Selah Live to OBS</h3>
+            <h3 style={{ margin: 0 }}>Help &amp; Support</h3>
           </div>
           <button className="iconbtn" aria-label="Close help" onClick={onClose}><Icon name="x" size={18} /></button>
         </div>
 
-        <ol className="col" style={{ gap: 10, margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.5 }}>
-          <li>Open <b>OBS Studio</b> (version 28 or newer).</li>
-          <li>In OBS, click <b>Tools → WebSocket Server Settings</b>.</li>
-          <li>Check <b>Enable WebSocket server</b> (keep Server Port <code className="mono">4455</code>), click <b>Show Connect Info</b>, and copy the <b>Server Password</b>.</li>
-          <li>In Selah Live, open <b>Settings</b>, paste the password under <b>OBS WebSocket password</b>, and click <b>Connect</b>.</li>
-          <li>Selah Live automatically creates the <b>Selah Live Overlay</b> Browser Source (1920×1080) in your active OBS scene.</li>
-          <li><b>Optional OBS Dock:</b> Copy your <b>Dock link</b> in Settings, then in OBS go to <b>Docks → Custom Browser Docks…</b>, name it <b>Selah Live</b>, paste the link, and click <b>Apply</b>.</li>
-        </ol>
-
-        <div className="banner ok" style={{ fontSize: 13 }}>
-          <Icon name="bolt" size={16} />
-          <span><b>Tip:</b> Keep Selah Live open (minimized is fine) during your service so the overlay and OBS dock stay connected.</span>
+        <div className="seg" role="tablist">
+          <button role="tab" aria-pressed={tab === "guide"} onClick={() => setTab("guide")}>OBS Connection Guide</button>
+          <button role="tab" aria-pressed={tab === "ticket"} onClick={() => setTab("ticket")}>Send Help Desk Message</button>
         </div>
 
-        <div className="row wrap" style={{ justifyContent: "flex-end", gap: 8 }}>
-          <Link href="/setup" className="btn btn-secondary btn-sm" onClick={onClose}>Re-run Setup Wizard</Link>
-          <Link href="/app/settings" className="btn btn-primary btn-sm" onClick={onClose}>Open OBS Settings</Link>
-        </div>
+        {tab === "guide" ? (
+          <>
+            <ol className="col" style={{ gap: 10, margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.5 }}>
+              <li>Open <b>OBS Studio</b> (version 28 or newer).</li>
+              <li>In OBS, click <b>Tools → WebSocket Server Settings</b>.</li>
+              <li>Check <b>Enable WebSocket server</b> (keep Server Port <code className="mono">4455</code>), click <b>Show Connect Info</b>, and copy the <b>Server Password</b>.</li>
+              <li>In Selah Live, open <b>Settings</b>, paste the password under <b>OBS WebSocket password</b>, and click <b>Connect</b>.</li>
+              <li>Selah Live automatically creates the <b>Selah Live Overlay</b> Browser Source (1920×1080) in your active OBS scene.</li>
+              <li><b>Optional OBS Dock:</b> Copy your <b>Dock link</b> in Settings, then in OBS go to <b>Docks → Custom Browser Docks…</b>, name it <b>Selah Live</b>, paste the link, and click <b>Apply</b>.</li>
+            </ol>
+
+            <div className="banner ok" style={{ fontSize: 13 }}>
+              <Icon name="bolt" size={16} />
+              <span><b>Tip:</b> Keep Selah Live open (minimized is fine) during your service so the overlay and OBS dock stay connected.</span>
+            </div>
+
+            <div className="row wrap between" style={{ gap: 8 }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTab("ticket")}>Still need help? Message Support →</button>
+              <div className="row wrap" style={{ gap: 8 }}>
+                <Link href="/setup" className="btn btn-secondary btn-sm" onClick={onClose}>Re-run Setup Wizard</Link>
+                <Link href="/app/settings" className="btn btn-primary btn-sm" onClick={onClose}>Open OBS Settings</Link>
+              </div>
+            </div>
+          </>
+        ) : sentId ? (
+          <div className="col" style={{ gap: 12, padding: "12px 0" }}>
+            <div className="banner ok">
+              <Icon name="checkc" size={18} />
+              <span><b>Message sent to the Selah Live Help Desk!</b> Our admin team can now see your message and resolve it.</span>
+            </div>
+            <div className="muted mono" style={{ fontSize: 12 }}>Reference ID: {sentId}</div>
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSentId("")}>Send another</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={onClose}>Done</button>
+            </div>
+          </div>
+        ) : (
+          <form className="col" style={{ gap: 10 }} onSubmit={submitTicket}>
+            <div className="muted" style={{ fontSize: 12 }}>
+              Sending as <b>{user?.name || "Volunteer"}</b> ({user?.email || "no email"}){churchName ? ` · ${churchName}` : ""}
+            </div>
+            <div className="grid2">
+              <div className="field">
+                <label>Topic</label>
+                <Select
+                  ariaLabel="Help topic"
+                  value={category}
+                  onChange={setCategory}
+                  options={["OBS Connection", "Bible / Songs", "Display / Overlay", "Account / Sync", "Other"]}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="help-subj">Subject (optional)</label>
+                <input id="help-subj" className="input" maxLength={120} placeholder="Short summary" value={subject} onChange={(e) => setSubject(e.target.value)} />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="help-msg">How can we help?</label>
+              <textarea
+                id="help-msg"
+                className="textarea"
+                style={{ minHeight: 110 }}
+                maxLength={2000}
+                placeholder="Describe what happened or what you need help with…"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                required
+              />
+            </div>
+            {err && <div className="banner bad"><Icon name="alertc" size={16} /><span>{err}</span></div>}
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={sending || message.trim().length < 5}>
+                <Icon name="send" size={15} />{sending ? "Sending…" : "Send to Help Desk"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -181,7 +288,7 @@ function ObsHelpModal({ onClose }) {
 
 export default function AppShell({ children, pending, preview = true }) {
   const path = usePathname(); const router = useRouter();
-  const { ready, obsStatus, live, online, updates, setupDone, hide, notices, manifest } = useApp();
+  const { ready, obsStatus, live, online, updates, setupDone, hide, notices, manifest, style } = useApp();
   const { user, logOut } = useAuth();
   const [bell, setBell] = useState(false); const [menu, setMenu] = useState(false); const [help, setHelp] = useState(false);
 
@@ -238,7 +345,7 @@ export default function AppShell({ children, pending, preview = true }) {
       </main>
       {preview && <PreviewPane pending={pending} />}
       {bell && <Notifications onClose={() => setBell(false)} />}
-      {help && <ObsHelpModal onClose={() => setHelp(false)} />}
+      {help && <ObsHelpModal onClose={() => setHelp(false)} user={user} churchName={style?.churchName} currentPath={path} />}
     </div>
   );
 }
