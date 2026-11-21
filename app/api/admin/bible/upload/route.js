@@ -47,7 +47,7 @@ export async function POST(request) {
   // Require MFA confirmation for large Bible uploads (> 3 MB) or saving a draft
   const needsMfa = text.length > LARGE_FILE_THRESHOLD || action === "draft";
   if (needsMfa) {
-    const mfaRes = await verifyAdminActionMfa(mfaCode);
+    const mfaRes = await verifyAdminActionMfa(mfaCode, a.adminKey || a.uid);
     if (!mfaRes.ok) {
       return Response.json({ error: mfaRes.error, mfaRequired: true }, { status: 403 });
     }

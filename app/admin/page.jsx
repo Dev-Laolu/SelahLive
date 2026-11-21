@@ -1070,7 +1070,7 @@ function UsersTab() {
       const msgs = {
         disable: "Account disabled.",
         enable: "Account re-enabled.",
-        grantAdmin: "Granted admin role (custom claim admin: true).",
+        grantAdmin: "Promoted to Admin! They can sign in at /admin with their email & password and will be required to set up Google Authenticator MFA.",
         revokeAdmin: "Revoked admin role.",
         resetPassword: "Password reset email queued.",
       };
@@ -1465,7 +1465,7 @@ function AdminLoginForm({ initialNotice = "", onLoggedIn }) {
           <h1 style={{ fontSize: 24, textAlign: "center" }}>Admin sign in</h1>
           {err && <div className="banner bad"><Icon name="alertc" size={16} /><span>{err}</span></div>}
           <div className="field">
-            <label htmlFor="admin-user">Admin username</label>
+            <label htmlFor="admin-user">Admin username or email</label>
             <input
               id="admin-user"
               className={`input ${err ? "error" : ""}`}
@@ -1475,7 +1475,7 @@ function AdminLoginForm({ initialNotice = "", onLoggedIn }) {
               autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter admin username"
+              placeholder="Owner username or promoted admin email"
             />
           </div>
           <div className="field">

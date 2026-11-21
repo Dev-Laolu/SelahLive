@@ -41,14 +41,17 @@ export async function POST(request) {
   if (step === "mfa") {
     const res = await verifyAdminMfaStep({ preAuthToken, code, ip });
     if (!res.ok) {
-      await logAudit({ uid: "admin" }, "admin.mfa_failed", `Step 2 (IP: ${ip})`).catch(() => {});
+      await logAudit({ uid: res.uid || "admin" }, "admin.mfa_failed", `Step 2 (IP: ${ip})`).catch(() => {});
       return Response.json({ error: res.error }, { status: res.status || 401 });
     }
-    await logAudit({ uid: res.session.uid }, "admin.login_success", `MFA verified (IP: ${ip})`).catch(() => {});
+    if (res.wasFirstSetup) {
+      await logAudit({ uid: res.session.uid }, "admin.mfa_setup", `Authenticator MFA enrolled (IP: ${ip})`).catch(() => {});
+    }
+    await logAudit({ uid: res.session.uid }, "admin.login_success", `MFA verified (${res.session.role || "admin"}, IP: ${ip})`).catch(() => {});
     return new Response(
       JSON.stringify({
         ok: true,
-        admin: { username: res.session.uid },
+        admin: { username: res.session.uid, role: res.session.role || "owner" },
         csrfToken: res.session.csrfToken,
       }),
       {
