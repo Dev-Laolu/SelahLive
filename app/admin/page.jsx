@@ -503,38 +503,91 @@ function BiblesTab() {
 
       <div className="card col" style={{ gap: 16 }}>
         <h3>Upload Bible version (.js, .json or .xml)</h3>
-        <label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) { setFile(f); setRep(null); setDraft(null); setCompressNote(""); } }}>
-          <div>
-            <Icon name="upload" size={28} className="gold" />
-            <div style={{ marginTop: 6 }}><b>{file ? (compressNote || `${file.name} (${(file.size / 1024).toFixed(1)} KB)`) : "Drop a .js, .json or .xml Bible file, or click to choose"}</b></div>
-            <div className="muted" style={{ fontSize: 12 }}>Supports JS (var bible_data = [...]), JSON (books → chapters → verses), Zefania XML, and OSIS XML up to 50 MB. Large files are automatically gzip-compressed before upload and verified with MFA.</div>
-          </div>
-          <input type="file" hidden accept=".js,.json,.xml" onChange={(e) => { setFile(e.target.files?.[0] || null); setRep(null); setDraft(null); setCompressNote(""); }} />
-        </label>
+        {(() => {
+          const KNOWN_BIBLES = {
+            KJV: "King James Version",
+            NKJV: "New King James Version",
+            AMP: "Amplified Bible",
+            AMPC: "Amplified Bible, Classic Edition",
+            NIV: "New International Version",
+            ESV: "English Standard Version",
+            NLT: "New Living Translation",
+            NASB: "New American Standard Bible",
+            CSB: "Christian Standard Bible",
+            MSG: "The Message",
+            ASV: "American Standard Version",
+            WEB: "World English Bible",
+            RSV: "Revised Standard Version",
+            NRSV: "New Revised Standard Version",
+            YLT: "Young's Literal Translation",
+            BBE: "Bible in Basic English",
+          };
+          const handlePickFile = (f) => {
+            setFile(f || null);
+            setRep(null);
+            setDraft(null);
+            setCompressNote("");
+            if (f) {
+              const rawCode = f.name.replace(/\.(js|json|xml|gz)$/gi, "").replace(/[^a-zA-Z0-9]+/g, "").toUpperCase().slice(0, 12);
+              if (rawCode) {
+                setMeta((m) => ({
+                  ...m,
+                  code: m.code.trim() ? m.code : rawCode,
+                  name: m.name.trim() ? m.name : (KNOWN_BIBLES[rawCode] || rawCode),
+                }));
+              }
+            }
+          };
+          const missingFields = [
+            !meta.name.trim() && "Translation name",
+            !meta.code.trim() && "Short code",
+            !meta.rights && "Rights confirmation",
+          ].filter(Boolean);
 
-        <div className="grid2">
-          <div className="field"><label htmlFor="b-name">Translation name</label><input id="b-name" className="input" value={meta.name} placeholder="King James Version" onChange={(e) => setMeta({ ...meta, name: e.target.value })} /></div>
-          <div className="field"><label htmlFor="b-code">Short code</label><input id="b-code" className="input" value={meta.code} placeholder="KJV" onChange={(e) => setMeta({ ...meta, code: e.target.value.toUpperCase() })} /></div>
-          <div className="field"><label htmlFor="b-lang">Language</label><input id="b-lang" className="input" value={meta.language} onChange={(e) => setMeta({ ...meta, language: e.target.value })} /></div>
-          <div className="field"><label htmlFor="b-lic">License type</label><Select id="b-lic" ariaLabel="License type" value={meta.license} onChange={(v) => setMeta({ ...meta, license: v })} options={["Public domain", "Licensed", "Other"]} /></div>
-        </div>
+          return (
+            <>
+              <label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handlePickFile(f); }}>
+                <div>
+                  <Icon name="upload" size={28} className="gold" />
+                  <div style={{ marginTop: 6 }}><b>{file ? (compressNote || `${file.name} (${(file.size / 1024).toFixed(1)} KB)`) : "Drop a .js, .json or .xml Bible file, or click to choose"}</b></div>
+                  <div className="muted" style={{ fontSize: 12 }}>Supports JS (var bible_data = [...]), JSON (books → chapters → verses), Zefania XML, and OSIS XML up to 50 MB. Large files are automatically gzip-compressed before upload and verified with MFA.</div>
+                </div>
+                <input type="file" hidden accept=".js,.json,.xml" onChange={(e) => handlePickFile(e.target.files?.[0] || null)} />
+              </label>
 
-        <label className="check">
-          <input type="checkbox" checked={meta.rights} onChange={(e) => setMeta({ ...meta, rights: e.target.checked })} />
-          <span><b>Rights confirmation (required):</b> I have the right to distribute this text.</span>
-        </label>
+              <div className="grid2">
+                <div className="field"><label htmlFor="b-name">Translation name (required)</label><input id="b-name" className="input" value={meta.name} placeholder="e.g. Amplified Bible" onChange={(e) => setMeta({ ...meta, name: e.target.value })} /></div>
+                <div className="field"><label htmlFor="b-code">Short code (required)</label><input id="b-code" className="input" value={meta.code} placeholder="e.g. AMP" onChange={(e) => setMeta({ ...meta, code: e.target.value.toUpperCase() })} /></div>
+                <div className="field"><label htmlFor="b-lang">Language</label><input id="b-lang" className="input" value={meta.language} onChange={(e) => setMeta({ ...meta, language: e.target.value })} /></div>
+                <div className="field"><label htmlFor="b-lic">License type</label><Select id="b-lic" ariaLabel="License type" value={meta.license} onChange={(v) => setMeta({ ...meta, license: v })} options={["Public domain", "Licensed", "Other"]} /></div>
+              </div>
 
-        <div className="row wrap">
-          <button className="btn btn-secondary" disabled={!file || busy} onClick={() => requestUpload("validate")}>
-            {busy ? "Compressing & validating…" : "1. Validate and preview"}
-          </button>
-          <button className="btn btn-secondary" disabled={!file || !rep?.ok || !meta.name || !meta.code || !meta.rights || busy} onClick={() => requestUpload("draft")}>
-            2. Save as Draft
-          </button>
-          <button className="btn btn-primary" disabled={!draft || busy} onClick={() => publish(draft.id)}>
-            <Icon name="send" size={16} />3. Publish & build .json.gz pack
-          </button>
-        </div>
+              <label className="check">
+                <input type="checkbox" checked={meta.rights} onChange={(e) => setMeta({ ...meta, rights: e.target.checked })} />
+                <span><b>Rights confirmation (required):</b> I have the right to distribute this text.</span>
+              </label>
+
+              <div className="row wrap">
+                <button className="btn btn-secondary" disabled={!file || busy} onClick={() => requestUpload("validate")}>
+                  {busy ? "Compressing & validating…" : "1. Validate and preview"}
+                </button>
+                <button className="btn btn-secondary" disabled={!file || !rep?.ok || missingFields.length > 0 || busy} onClick={() => requestUpload("draft")}>
+                  2. Save as Draft
+                </button>
+                <button className="btn btn-primary" disabled={!draft || busy} onClick={() => publish(draft.id)}>
+                  <Icon name="send" size={16} />3. Publish &amp; build .json.gz pack
+                </button>
+              </div>
+
+              {rep?.ok && !draft && missingFields.length > 0 && (
+                <div className="banner warn" style={{ fontSize: 13 }}>
+                  <Icon name="alert" size={16} />
+                  <span>To enable <b>2. Save as Draft</b>, fill in: <b>{missingFields.join(", ")}</b>.</span>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {draft && (
           <div className="card raised col" style={{ gap: 10 }}>
