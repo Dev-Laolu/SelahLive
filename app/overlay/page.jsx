@@ -126,12 +126,22 @@ export default function Overlay() {
         // V1.1 §1.3: if hidden, store silently without displaying; if visible, update content smoothly without replaying entrance!
         if (d.style) setStyle({ ...DEFAULT_STYLE, ...d.style });
         if (d.theme) setTheme(d.theme);
-        setItem(d);
-        if (visibleRef.current) {
-          clearTimeout(hideTimerRef.current);
-          setOut(false);
-          setContentKey((k) => k + 1);
-        }
+        setItem((prev) => {
+          const textChanged =
+            !prev ||
+            prev.title !== d.title ||
+            prev.subtitle !== d.subtitle ||
+            prev.body !== d.body ||
+            prev.label !== d.label ||
+            prev.mode !== d.mode ||
+            prev.clearMode !== d.clearMode;
+          if (visibleRef.current) {
+            clearTimeout(hideTimerRef.current);
+            setOut(false);
+            if (textChanged) setContentKey((k) => k + 1);
+          }
+          return d;
+        });
       } else if (d.type === "selah:hide") {
         visibleRef.current = false;
         setOut(true);

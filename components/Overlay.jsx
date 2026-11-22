@@ -301,6 +301,7 @@ function DividerLine({ divider }) {
           ? `linear-gradient(90deg, transparent, ${divider.color || "#E8B84A"}, transparent)`
           : "transparent",
         borderTop: isGrad ? "none" : `${divider.thickness || 2}px ${divider.style || "solid"} ${divider.color || "#E8B84A"}`,
+        transform: divider.x || divider.y ? `translate(${divider.x || 0}px, ${divider.y || 0}px)` : undefined,
         flexShrink: 0,
       }}
     />
@@ -441,10 +442,18 @@ export function OverlayStage({
   const activeRefEl = isSong ? els.songTitle : els.reference;
 
   const refBlock = hasRefLine && clearMode !== "clearText" && (
-    <div style={{ display: "flex", justifyContent: refAlignJustify, width: "100%", flexShrink: 0 }}>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: refAlignJustify,
+        width: "100%",
+        flexShrink: 0,
+        transform: activeRefEl.x || activeRefEl.y ? `translate(${activeRefEl.x || 0}px, ${activeRefEl.y || 0}px)` : undefined,
+      }}
+    >
       <div style={{ ...refBoxCss, gap: 4 }}>
         {showRefEl && (
-          <span style={{ ...textElStyle(activeRefEl, perf), fontSize: activeRefEl.fontSize }}>
+          <span style={{ ...textElStyle(activeRefEl, perf), transform: undefined, fontSize: activeRefEl.fontSize }}>
             <AnimatedContent text={formattedRef} anim={activeRefEl.animIn} reduceMotion={redMotion} perfMode={perf} highlight={activeRefEl.highlight} />
           </span>
         )}
@@ -591,7 +600,8 @@ export function OverlayStage({
             className={`ov-fs ${contentTransCls}`}
             style={{
               ...transVars,
-              position: "relative",
+              position: "absolute",
+              inset: 0,
               zIndex: 3,
               padding: `${cfg.paddingY ?? 140}px ${cfg.paddingX ?? 180}px`,
             }}

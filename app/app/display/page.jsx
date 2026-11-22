@@ -51,12 +51,23 @@ export default function DisplayPage() {
   const [showGuides, setShowGuides] = useState(true);
   const [animReplay, setAnimReplay] = useState(0);
 
-  // Active working theme + Undo/Redo + Modified dirty tracking (V1.2 §2.6 & §5.2)
+  // Active working theme + local buffered style (never pushed to OBS until Save!) + Undo/Redo
   const initialTheme = themes.find((t) => t.id === activeThemeIds.scripture) || themes[0];
   const [draft, setDraft] = useState(() => sanitizeTheme(initialTheme));
+  const [draftStyle, setDraftStyle] = useState(() => ({ ...style }));
   const [dirty, setDirty] = useState(false);
+  const [styleDirty, setStyleDirty] = useState(false);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
+
+  useEffect(() => {
+    if (!styleDirty) setDraftStyle({ ...style });
+  }, [style, styleDirty]);
+
+  const patchDraftStyle = (patch) => {
+    setDraftStyle((prev) => ({ ...prev, ...patch }));
+    setStyleDirty(true);
+  };
 
   // Save-as-new-template & Unsaved prompt modals
   const [saveModal, setSaveModal] = useState(false);
@@ -91,13 +102,13 @@ export default function DisplayPage() {
   // Warn on tab close if unsaved changes exist (V1.2 §5.2)
   useEffect(() => {
     const onBeforeUnload = (e) => {
-      if (!dirty) return;
+      if (!dirty && !styleDirty) return;
       e.preventDefault();
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
+  }, [dirty, styleDirty]);
 
   const layout = draft[editMode];
   const els = layout.elements;
@@ -124,14 +135,13 @@ export default function DisplayPage() {
     return { ...SAMPLE_VERSE, mode: editMode };
   }, [live, draft.slot, draft.placeholderTitle, draft.placeholderBody, editMode]);
 
-  // Commit a draft mutation with undo stack + live overlay preview sync (V1.2 §2.6)
+  // Commit a draft mutation locally ONLY (does NOT push to OBS until Save is clicked!)
   const mutateDraft = (updater) => {
     setDraft((prev) => {
       const next = sanitizeTheme(updater(clone(prev)));
       setUndoStack((u) => [...u.slice(-29), prev]);
       setRedoStack([]);
       setDirty(true);
-      if (live) updateLive(live, { force: true, overrides: { theme: next } });
       return next;
     });
   };
@@ -157,7 +167,6 @@ export default function DisplayPage() {
     setUndoStack((u) => u.slice(0, -1));
     setRedoStack((r) => [...r, draft]);
     setDraft(prev);
-    if (live) updateLive(live, { force: true, overrides: { theme: prev } });
   };
 
   const redo = () => {
@@ -166,13 +175,36 @@ export default function DisplayPage() {
     setRedoStack((r) => r.slice(0, -1));
     setUndoStack((u) => [...u, draft]);
     setDraft(next);
-    if (live) updateLive(live, { force: true, overrides: { theme: next } });
   };
 
   // Guarded action runner (prompts Save / Discard / Keep editing if dirty)
   const guardDirty = (label, run) => {
-    if (!dirty) { run(); return; }
+    if (!dirty && !styleDirty) { run(); return; }
     setPendingAction({ label, run });
+  };
+
+  const handleSaveAndApply = async () => {
+    if (styleDirty) {
+      saveStyle(draftStyle);
+      setStyleDirty(false);
+    }
+    if (!dirty) {
+      toast("Saved church branding & display settings to OBS.");
+      return;
+    }
+    if (!draft.builtIn) {
+      try {
+        const saved = await saveTheme(draft);
+        selectThemeForSlot(saved.slot, saved.id);
+        setDraft(saved);
+        setDirty(false);
+        toast(`Saved "${saved.name}" and applied to OBS.`);
+      } catch (e) {
+        toast(e.message, "bad");
+      }
+    } else {
+      openSaveAsModal();
+    }
   };
 
   const openTemplateInEditor = (tpl) => {
@@ -206,6 +238,10 @@ export default function DisplayPage() {
       return;
     }
     try {
+      if (styleDirty) {
+        saveStyle(draftStyle);
+        setStyleDirty(false);
+      }
       const saved = await saveTheme({
         ...draft,
         id: `custom-${Date.now()}`,
@@ -219,7 +255,7 @@ export default function DisplayPage() {
       setDraft(saved);
       setDirty(false);
       setSaveModal(false);
-      toast(`Saved new template "${saved.name}".`);
+      toast(`Saved new template "${saved.name}" and applied to OBS.`);
       if (pendingAction) {
         const fn = pendingAction.run;
         setPendingAction(null);
@@ -228,6 +264,43 @@ export default function DisplayPage() {
     } catch (err) {
       setSaveErr(err.message);
     }
+  };
+
+  // Drag any selected element on the 16:9 canvas (Full Screen & Lower Third!)
+  const startElementDrag = (e) => {
+    const targetKey = selectedEl === "background" ? "body" : selectedEl;
+    const curEl = els[targetKey];
+    if (!curEl || !("x" in curEl)) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origX = curEl.x || 0;
+    const origY = curEl.y || 0;
+    const isLogoCorner = targetKey === "logo" && editMode === "fullScreen";
+
+    const onMove = (ev) => {
+      const dx = Math.round((ev.clientX - startX) / stageScale);
+      const dy = Math.round((ev.clientY - startY) / stageScale);
+      let nx = origX + dx;
+      let ny = origY + dy;
+      if (!isLogoCorner) {
+        if (Math.abs(nx) < 16) nx = 0;
+        if (Math.abs(ny) < 16) ny = 0;
+        nx = Math.max(-960, Math.min(960, nx));
+        ny = Math.max(-540, Math.min(540, ny));
+        patchElement(targetKey, { x: nx, y: ny });
+      } else {
+        nx = Math.max(0, Math.min(1800, nx));
+        ny = Math.max(0, Math.min(1000, ny));
+        patchElement("logo", { position: "top-left", x: nx, y: ny });
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   // Interactive drag & resize for Lower Third box
@@ -282,12 +355,12 @@ export default function DisplayPage() {
     }
   };
 
-  // Upload church logo or watermark (2 MB max)
+  // Upload church logo or watermark (2 MB max — buffered locally until Save & Apply)
   const handleBrandImageUpload = async (field, file) => {
     try {
       const processed = await processUploadedImage(file, 2 * 1024 * 1024);
-      saveStyle({ [field]: processed.dataUrl });
-      toast(field === "logo" ? "Church logo updated." : "Watermark image updated.");
+      patchDraftStyle({ [field]: processed.dataUrl });
+      toast(field === "logo" ? "Church logo staged (click Save & Apply to push to OBS)." : "Watermark staged (click Save & Apply to push to OBS).");
     } catch (e) {
       toast(e.message, "bad");
     }
@@ -427,23 +500,30 @@ export default function DisplayPage() {
               <button aria-pressed={view === "gallery"} onClick={() => setView("gallery")}>Templates ({themes.length})</button>
               <button aria-pressed={view === "editor"} onClick={() => setView("editor")}>Element Editor</button>
             </div>
-            {dirty && <span className="chip warn">Modified</span>}
+            {(dirty || styleDirty) && <span className="chip warn">Unsaved changes (not sent to OBS yet)</span>}
           </div>
 
           <div className="row wrap" style={{ gap: 8 }}>
             <label className="check" style={{ fontSize: 12 }} title="Caps canvas to 30 fps, lowers particles, disables blur">
-              <input type="checkbox" checked={!!style.performanceMode} onChange={(e) => saveStyle({ performanceMode: e.target.checked })} />
+              <input type="checkbox" checked={!!draftStyle.performanceMode} onChange={(e) => patchDraftStyle({ performanceMode: e.target.checked })} />
               <span>Performance mode</span>
             </label>
             <label className="check" style={{ fontSize: 12 }} title="Replace all motion with simple fades and static backgrounds">
-              <input type="checkbox" checked={!!style.reduceMotion} onChange={(e) => saveStyle({ reduceMotion: e.target.checked })} />
+              <input type="checkbox" checked={!!draftStyle.reduceMotion} onChange={(e) => patchDraftStyle({ reduceMotion: e.target.checked })} />
               <span>Reduce motion</span>
             </label>
             {view === "editor" && (
               <>
                 <button className="btn btn-secondary btn-sm" disabled={!undoStack.length} onClick={undo} title="Undo"><Icon name="undo" size={15} /></button>
                 <button className="btn btn-secondary btn-sm" disabled={!redoStack.length} onClick={redo} title="Redo"><Icon name="redo" size={15} /></button>
-                <button className="btn btn-primary btn-sm" onClick={openSaveAsModal}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={!dirty && !styleDirty}
+                  onClick={handleSaveAndApply}
+                >
+                  <Icon name="check" size={15} /> Save &amp; Apply to OBS
+                </button>
+                <button className="btn btn-secondary btn-sm" onClick={openSaveAsModal}>
                   Save as new template
                 </button>
               </>
@@ -585,37 +665,56 @@ export default function DisplayPage() {
               </div>
             </div>
 
-            {/* Interactive 16:9 Canvas Preview with Professional Broadcast Grid & Snap Tools */}
+            {/* Interactive 16:9 Canvas Preview with Professional Broadcast Grid, Element Drag & Snap Tools */}
             <div className="card col" style={{ padding: 10, gap: 8 }}>
               <div className="row between wrap" style={{ gap: 8, fontSize: 12 }}>
                 <div className="row wrap" style={{ gap: 8 }}>
                   <span className="chip mono" style={{ fontSize: 11 }}>1920 × 1080</span>
-                  {editMode === "lowerThird" && (
-                    <span className="muted mono" style={{ fontSize: 11 }}>
-                      X:{layout.x} · Bottom:{layout.bottom} · {layout.width}×{layout.height}
-                    </span>
-                  )}
+                  <span className="muted" style={{ fontSize: 11 }}>
+                    Drag on canvas to move: <b className="gold">{ELEMENT_KEYS.find((e) => e.key === (selectedEl === "background" ? "body" : selectedEl))?.label}</b>
+                    {els[selectedEl === "background" ? "body" : selectedEl] && "x" in els[selectedEl === "background" ? "body" : selectedEl]
+                      ? ` (X:${els[selectedEl === "background" ? "body" : selectedEl].x || 0}, Y:${els[selectedEl === "background" ? "body" : selectedEl].y || 0})`
+                      : ""}
+                  </span>
                 </div>
-                {editMode === "lowerThird" && (
-                  <div className="row wrap" style={{ gap: 4 }}>
-                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "left", x: 60 })}>Snap Left</button>
-                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "center", x: Math.round((1920 - layout.width) / 2) })}>Snap Center</button>
-                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "right", x: 1920 - 60 - layout.width })}>Snap Right</button>
-                    <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "center", x: 160, bottom: 80, width: 1600, height: 220 })}>Reset box</button>
-                  </div>
-                )}
+                <div className="row wrap" style={{ gap: 4 }}>
+                  {editMode === "lowerThird" && (
+                    <>
+                      <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "left", x: 60 })}>Bar Left</button>
+                      <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "center", x: Math.round((1920 - layout.width) / 2) })}>Bar Center</button>
+                      <button className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 26 }} onClick={() => patchLayout({ hpos: "right", x: 1920 - 60 - layout.width })}>Bar Right</button>
+                    </>
+                  )}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: "2px 8px", minHeight: 26 }}
+                    onClick={() => {
+                      const k = selectedEl === "background" ? "body" : selectedEl;
+                      if (k === "logo" && editMode === "fullScreen") patchElement("logo", { x: 48, y: 40 });
+                      else if (els[k]) patchElement(k, { x: 0, y: 0 });
+                    }}
+                  >
+                    Center / Reset Element
+                  </button>
+                </div>
               </div>
-              <div className="preview-box" ref={stageWrapRef} style={{ position: "relative" }}>
+              <div
+                className="preview-box"
+                ref={stageWrapRef}
+                onPointerDown={startElementDrag}
+                title="Click and drag to move the selected element on screen"
+                style={{ position: "relative", cursor: "grab" }}
+              >
                 <div className="preview-stage" style={{ transform: `scale(${stageScale})` }}>
                   <OverlayStage
                     item={sampleItem}
-                    style={style}
+                    style={draftStyle}
                     theme={draft}
                     assetsMap={assetsMap}
                     enterKey={animReplay}
                     contentKey={animReplay}
-                    performanceMode={!!style.performanceMode}
-                    reduceMotion={!!style.reduceMotion}
+                    performanceMode={!!draftStyle.performanceMode}
+                    reduceMotion={!!draftStyle.reduceMotion}
                   />
                 </div>
                 {showGuides && (
@@ -832,6 +931,16 @@ export default function DisplayPage() {
                       <div className="field"><label>Space above ({els.divider.marginTop}px)</label><input type="range" min={0} max={60} value={els.divider.marginTop} onChange={(e) => patchElement("divider", { marginTop: +e.target.value })} /></div>
                       <div className="field"><label>Space below ({els.divider.marginBottom}px)</label><input type="range" min={0} max={60} value={els.divider.marginBottom} onChange={(e) => patchElement("divider", { marginBottom: +e.target.value })} /></div>
                     </div>
+                    <div className="card raised col" style={{ gap: 8 }}>
+                      <div className="row between wrap">
+                        <b>Position offset (or drag on canvas)</b>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => patchElement("divider", { x: 0, y: 0 })}>Reset position (0, 0)</button>
+                      </div>
+                      <div className="grid2">
+                        <div className="field"><label>Horizontal X ({els.divider.x || 0}px)</label><input type="range" min={-960} max={960} value={els.divider.x || 0} onChange={(e) => patchElement("divider", { x: +e.target.value })} /></div>
+                        <div className="field"><label>Vertical Y ({els.divider.y || 0}px)</label><input type="range" min={-540} max={540} value={els.divider.y || 0} onChange={(e) => patchElement("divider", { y: +e.target.value })} /></div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -848,11 +957,34 @@ export default function DisplayPage() {
                         <input type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && handleBrandImageUpload("logo", e.target.files[0])} />
                       </label>
                     </div>
+                    <div className="field">
+                      <label htmlFor="brand-church-name">Church name text</label>
+                      <input
+                        id="brand-church-name"
+                        className="input"
+                        maxLength={120}
+                        value={draftStyle.churchName || ""}
+                        placeholder="e.g. Grace Fellowship Church"
+                        onChange={(e) => patchDraftStyle({ churchName: e.target.value })}
+                      />
+                    </div>
                     <div className="grid3">
                       <div className="field"><label>Size ({els.logo.size}px)</label><input type="range" min={24} max={220} value={els.logo.size} onChange={(e) => patchElement("logo", { size: +e.target.value })} /></div>
                       <div className="field"><label>Position</label><Select ariaLabel="Logo position" value={els.logo.position} onChange={(v) => patchElement("logo", { position: v })} options={editMode === "lowerThird" ? ["left", "right"] : ["top-left", "top-right", "bottom-left", "bottom-right"]} /></div>
                       <div className="field"><label>Shape mask</label><Select ariaLabel="Logo mask" value={els.logo.mask} onChange={(v) => patchElement("logo", { mask: v })} options={["none", "rounded", "circle"]} /></div>
                     </div>
+                    {editMode === "fullScreen" && (
+                      <div className="card raised col" style={{ gap: 8 }}>
+                        <div className="row between wrap">
+                          <b>Full-screen position (X / Y or drag on canvas)</b>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => patchElement("logo", { position: "top-left", x: 48, y: 40 })}>Reset top-left</button>
+                        </div>
+                        <div className="grid2">
+                          <div className="field"><label>X ({els.logo.x ?? 48}px)</label><input type="range" min={0} max={1800} value={els.logo.x ?? 48} onChange={(e) => patchElement("logo", { position: "top-left", x: +e.target.value })} /></div>
+                          <div className="field"><label>Y ({els.logo.y ?? 40}px)</label><input type="range" min={0} max={1000} value={els.logo.y ?? 40} onChange={(e) => patchElement("logo", { position: "top-left", y: +e.target.value })} /></div>
+                        </div>
+                      </div>
+                    )}
                     <div className="grid3">
                       <div className="field"><label>Opacity ({els.logo.opacity}%)</label><input type="range" min={10} max={100} value={els.logo.opacity} onChange={(e) => patchElement("logo", { opacity: +e.target.value })} /></div>
                       <div className="field"><label>Padding ({els.logo.padding}px)</label><input type="range" min={0} max={32} value={els.logo.padding} onChange={(e) => patchElement("logo", { padding: +e.target.value })} /></div>
@@ -907,12 +1039,48 @@ export default function DisplayPage() {
                       </div>
                     </div>
 
+                    {selectedEl === "churchName" && (
+                      <div className="field">
+                        <label htmlFor="church-name-input">Church name text</label>
+                        <input
+                          id="church-name-input"
+                          className="input"
+                          maxLength={120}
+                          value={draftStyle.churchName || ""}
+                          placeholder="e.g. Grace Fellowship Church"
+                          onChange={(e) => patchDraftStyle({ churchName: e.target.value })}
+                        />
+                      </div>
+                    )}
+
                     {selectedEl === "customText" && (
                       <div className="field">
                         <label>Custom text content</label>
                         <input className="input" value={activeTextEl.text || ""} placeholder="e.g. Online: yourchurch.org/give" onChange={(e) => patchElement("customText", { text: e.target.value })} />
                       </div>
                     )}
+
+                    {/* Position (X / Y offset) & Quick Placement on Display */}
+                    <div className="card raised col" style={{ gap: 8 }}>
+                      <div className="row between wrap" style={{ gap: 6 }}>
+                        <b>Position on screen (drag on canvas or use sliders)</b>
+                        <div className="row wrap" style={{ gap: 4 }}>
+                          <button type="button" className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 24 }} onClick={() => patchElement(selectedEl, { y: -180 })}>Move Up</button>
+                          <button type="button" className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 24 }} onClick={() => patchElement(selectedEl, { x: 0, y: 0 })}>Center (0, 0)</button>
+                          <button type="button" className="btn btn-ghost btn-sm" style={{ padding: "2px 8px", minHeight: 24 }} onClick={() => patchElement(selectedEl, { y: 180 })}>Move Down</button>
+                        </div>
+                      </div>
+                      <div className="grid2">
+                        <div className="field">
+                          <label>Horizontal X offset ({activeTextEl.x || 0}px)</label>
+                          <input type="range" min={-960} max={960} value={activeTextEl.x || 0} onChange={(e) => patchElement(selectedEl, { x: +e.target.value })} />
+                        </div>
+                        <div className="field">
+                          <label>Vertical Y offset ({activeTextEl.y || 0}px)</label>
+                          <input type="range" min={-540} max={540} value={activeTextEl.y || 0} onChange={(e) => patchElement(selectedEl, { y: +e.target.value })} />
+                        </div>
+                      </div>
+                    </div>
 
                     {/* Reference-specific options (V1.2 §2.3) */}
                     {selectedEl === "reference" && (
