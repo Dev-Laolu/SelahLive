@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import Icon from "@/components/Icon";
+import { useToast } from "@/components/Toast";
 import { useApp } from "@/lib/store";
 import { highlightSegments, unifiedSearch } from "@/lib/search";
 import { songSlides } from "@/lib/songs";
@@ -20,8 +21,9 @@ function HighlightedText({ text, query }) {
 
 export default function OverviewPage() {
   const router = useRouter();
+  const toast = useToast();
   const {
-    bibles, songPacks, customSongs, recentTexts, savedTexts,
+    bibles, songPacks, customSongs, recentTexts, savedTexts, saveTextItem,
     favSongs, songStats, recent, pinned, updates, obsStatus, online,
     activeBibleId, live, show, updateLive, takeLive, hide, stepLive,
     lyricsLinesPerSlide, bumpSongUse, bumpTextUse, syncNotice,
@@ -30,7 +32,39 @@ export default function OverviewPage() {
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all"); // all | scripture | songs | text
   const [pending, setPending] = useState(null);
+  const [newTextModal, setNewTextModal] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newBody, setNewBody] = useState("");
+  const [newFav, setNewFav] = useState(true);
   const inputRef = useRef(null);
+
+  const handleCreateNewText = async ({ alsoShow = false } = {}) => {
+    if (!newTitle.trim() && !newBody.trim()) return;
+    const autoTitle = newTitle.trim() || newBody.trim().split("\n")[0].slice(0, 60) || "Announcement";
+    try {
+      const saved = await saveTextItem({
+        title: autoTitle,
+        body: newBody.trim(),
+        tags: ["Service"],
+        favourite: newFav,
+      });
+      const item = { kind: "text", title: saved.title, subtitle: "", body: saved.body, templateId: saved.templateId || "" };
+      setPending(item);
+      toast(`Saved "${saved.title}" to your app texts.`);
+      if (alsoShow) {
+        if (live) takeLive(item);
+        else show(item);
+        bumpTextUse(saved.id);
+      } else {
+        updateLive(item);
+      }
+      setNewTitle("");
+      setNewBody("");
+      setNewTextModal(false);
+    } catch (e) {
+      toast(e.message, "bad");
+    }
+  };
 
   const pack = bibles.find((b) => b.id === activeBibleId) || bibles[0];
 
@@ -178,7 +212,7 @@ export default function OverviewPage() {
             <div className="muted" style={{ fontSize: 13 }}>Search across Scripture, Songs, and Saved Texts — or jump straight into your service.</div>
           </div>
           <div className="row wrap" style={{ gap: 8 }}>
-            <Link href="/app/text" className="btn btn-secondary btn-sm"><Icon name="plus" size={16} />New text</Link>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setNewTextModal(true)}><Icon name="plus" size={16} />New text</button>
             <Link href="/app/songs" className="btn btn-secondary btn-sm"><Icon name="music" size={16} />Add song</Link>
             <Link href="/app/display" className="btn btn-primary btn-sm"><Icon name="monitor" size={16} />Open Display</Link>
           </div>
@@ -300,11 +334,14 @@ export default function OverviewPage() {
         <div className="grid2">
           <div className="card col" style={{ gap: 10 }}>
             <div className="row between">
-              <h3 style={{ fontSize: 15 }}><Icon name="star" size={16} className="gold" style={{ marginRight: 6 }} />Favourites</h3>
-              <Link href="/app/songs" className="muted" style={{ fontSize: 12 }}>All songs</Link>
+              <h3 style={{ fontSize: 15 }}><Icon name="star" size={16} className="gold" style={{ marginRight: 6 }} />Favourites &amp; Saved Texts</h3>
+              <div className="row" style={{ gap: 8 }}>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNewTextModal(true)}><Icon name="plus" size={13} />Add text</button>
+                <Link href="/app/text" className="muted" style={{ fontSize: 12 }}>All texts</Link>
+              </div>
             </div>
-            {favouriteSongsList.length === 0 && favouriteTextsList.length === 0 ? (
-              <div className="muted" style={{ fontSize: 13 }}>Star your favourite songs or saved texts to pin them here.</div>
+            {favouriteSongsList.length === 0 && savedTexts.length === 0 ? (
+              <div className="muted" style={{ fontSize: 13 }}>Star your favourite songs or click Add text to create a saved text.</div>
             ) : (
               <div className="col" style={{ gap: 6 }}>
                 {favouriteSongsList.map((s) => (
@@ -316,7 +353,7 @@ export default function OverviewPage() {
                     {s.author && <div className="muted" style={{ fontSize: 12 }}>{s.author}</div>}
                   </button>
                 ))}
-                {favouriteTextsList.map((t) => (
+                {savedTexts.slice(0, 8).map((t) => (
                   <button key={t.id} className="list-item" style={{ textAlign: "left" }} onClick={() => selectSavedText(t)}>
                     <div className="row between">
                       <b>{t.title}</b>
@@ -368,6 +405,38 @@ export default function OverviewPage() {
           </div>
         </div>
       </div>
+
+      {newTextModal && (
+        <div className="modal-bg" role="dialog" aria-modal="true" aria-label="Create new text" onClick={(e) => e.target === e.currentTarget && setNewTextModal(false)}>
+          <div className="modal col" style={{ gap: 12, maxWidth: 520 }}>
+            <div className="row between">
+              <h3 style={{ margin: 0 }}>Create &amp; Save New Text</h3>
+              <button type="button" className="iconbtn" onClick={() => setNewTextModal(false)}><Icon name="x" size={18} /></button>
+            </div>
+            <div className="field">
+              <label htmlFor="ov-new-title">Title (optional — auto-filled from text if blank)</label>
+              <input id="ov-new-title" className="input" maxLength={100} autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="e.g. Sermon Point 1, Offering, Welcome…" />
+            </div>
+            <div className="field">
+              <label htmlFor="ov-new-body">Text to display</label>
+              <textarea id="ov-new-body" className="textarea" style={{ minHeight: 130 }} maxLength={10000} value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="Type your announcement, note, or custom text here…" />
+            </div>
+            <label className="check">
+              <input type="checkbox" checked={newFav} onChange={(e) => setNewFav(e.target.checked)} />
+              <span>Pin to Favourites on Overview &amp; Text list</span>
+            </label>
+            <div className="row wrap" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setNewTextModal(false)}>Cancel</button>
+              <button type="button" className="btn btn-secondary" disabled={!newTitle.trim() && !newBody.trim()} onClick={() => handleCreateNewText({ alsoShow: false })}>
+                <Icon name="plus" size={15} /> Save &amp; Add to App
+              </button>
+              <button type="button" className="btn btn-primary" disabled={!newBody.trim()} onClick={() => handleCreateNewText({ alsoShow: true })}>
+                <Icon name="play" size={15} /> Save &amp; Show Live
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

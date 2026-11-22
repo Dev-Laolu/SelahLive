@@ -304,9 +304,24 @@ export default function Dock() {
                 }}
                 aria-label="Quick text message"
               />
-              <div className="row" style={{ gap: 6 }}>
+              <div className="row wrap" style={{ gap: 5 }}>
                 <button type="submit" className="btn btn-primary grow" disabled={!quickBody.trim()}>
-                  <Icon name="play" size={13} /> Push Text Live
+                  <Icon name="play" size={13} /> Push Live
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary grow"
+                  disabled={!quickBody.trim()}
+                  onClick={() => {
+                    const body = quickBody.trim();
+                    if (!body) return;
+                    const title = quickTitle.trim() || body.split("\n")[0].slice(0, 50) || "Saved Text";
+                    cmd("saveText", { title, body, pushLive: false });
+                    setQuickTitle("");
+                    setQuickBody("");
+                  }}
+                >
+                  <Icon name="plus" size={13} /> Save to App
                 </button>
                 {(quickTitle || quickBody) && (
                   <button type="button" className="btn btn-ghost" onClick={() => { setQuickTitle(""); setQuickBody(""); }}>

@@ -862,6 +862,20 @@ export function AppProvider({ children }) {
         } else if (cmd === "clearText") clearText();
         else if (cmd === "blackout") blackout();
         else if (cmd === "logoScreen") logoScreen();
+        else if (cmd === "saveText" && d.body) {
+          const autoTitle = String(d.title || "").trim() || String(d.body || "").trim().split("\n")[0].slice(0, 60) || "Saved Text";
+          saveTextItem({
+            title: autoTitle,
+            body: String(d.body || "").trim(),
+            tags: ["Saved"],
+            favourite: !!d.favourite,
+          }).then((saved) => {
+            broadcastState();
+            if (d.pushLive && saved) {
+              takeLive({ kind: "text", title: saved.title, subtitle: "", body: saved.body, templateId: saved.templateId || "" });
+            }
+          }).catch(() => {});
+        }
       } else if (d.type === "selah:dock-show" && d.item) {
         show(d.item);
       } else if (d.type === "selah:dock-hide") {

@@ -73,6 +73,8 @@ export default function TextPage() {
     updateLive(nextItem);
   };
 
+  const titleInputRef = useRef(null);
+
   const startNew = () => {
     setActiveId(null);
     setTitle("");
@@ -80,22 +82,41 @@ export default function TextPage() {
     setTagsInput("");
     setFavourite(false);
     setTemplateId("");
+    setTimeout(() => titleInputRef.current?.focus(), 20);
   };
 
-  const handleSave = async () => {
-    if (!title.trim()) { toast("Enter a title to save this text (1–100 chars).", "bad"); return; }
+  const deriveTitle = () => {
+    const t = title.trim();
+    if (t) return t;
+    const firstLine = body.trim().split("\n")[0]?.trim() || "";
+    return firstLine.slice(0, 60) || "Announcement";
+  };
+
+  const handleSave = async ({ asNew = false, alsoShow = false } = {}) => {
+    if (!title.trim() && !body.trim()) {
+      toast("Type a title or message first.", "bad");
+      return;
+    }
     try {
+      const finalTitle = deriveTitle();
       const tags = tagsInput.split(",").map((x) => x.trim()).filter(Boolean);
       const saved = await saveTextItem({
-        id: activeId,
-        title: title.trim(),
-        body,
+        id: asNew ? null : activeId,
+        title: finalTitle,
+        body: body.trim(),
         tags,
         favourite,
         templateId,
       });
       setActiveId(saved.id);
-      toast(`Saved "${saved.title}".`);
+      setTitle(saved.title);
+      toast(asNew || !activeId ? `Added "${saved.title}" to your Saved Texts.` : `Updated "${saved.title}".`);
+      if (alsoShow) {
+        const showPayload = { kind: "text", title: saved.title, subtitle: "", body: saved.body, templateId: saved.templateId || "" };
+        if (live) takeLive(showPayload);
+        else show(showPayload);
+        bumpTextUse(saved.id);
+      }
     } catch (e) {
       toast(e.message, "bad");
     }
@@ -192,13 +213,19 @@ export default function TextPage() {
   return (
     <AppShell pending={item}>
       <div className="row between wrap" style={{ gap: 10 }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Text &amp; Announcements</h1>
-        <button className="btn btn-secondary btn-sm" onClick={startNew}><Icon name="plus" size={15} />New text</button>
+        <div>
+          <h1 className="page-title" style={{ margin: 0 }}>Text &amp; Announcements</h1>
+          <span className="muted" style={{ fontSize: 13 }}>Type out any new text, save it to your app list, or push it live to OBS.</span>
+        </div>
+        <button className="btn btn-primary btn-sm" onClick={startNew}><Icon name="plus" size={15} />Create New Text</button>
       </div>
 
       <div className="two" style={{ gridTemplateColumns: "290px 1fr", alignItems: "start" }}>
         {/* Left: Saved Texts library with Favourites pinned on top */}
         <div className="card col" style={{ gap: 10, padding: 12 }}>
+          <button className="btn btn-secondary btn-sm btn-block" onClick={startNew}>
+            <Icon name="plus" size={15} /> + Type &amp; Add New Text
+          </button>
           <div className="row" style={{ gap: 6 }}>
             <input
               className="input"
@@ -245,10 +272,18 @@ export default function TextPage() {
 
         {/* Right: Editor */}
         <div className="card col" style={{ gap: 12 }}>
+          <div className="row between wrap" style={{ gap: 8 }}>
+            <span className="chip">{activeId ? `Editing: ${title || "Saved text"}` : "Creating new text"}</span>
+            {activeId && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={startNew}>
+                <Icon name="plus" size={14} /> Clear &amp; start fresh
+              </button>
+            )}
+          </div>
           <div className="grid2">
             <div className="field">
-              <label htmlFor="t">Title (required to save)</label>
-              <input id="t" className="input" maxLength={100} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Offering today, Welcome, Prayer…" />
+              <label htmlFor="t">Title (auto-filled from text if left blank)</label>
+              <input ref={titleInputRef} id="t" className="input" maxLength={100} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Offering today, Welcome, Sermon Note…" />
             </div>
             <div className="field">
               <label>Template</label>
@@ -303,13 +338,36 @@ export default function TextPage() {
                 if (live) takeLive(item);
                 else show(item);
                 if (activeId) bumpTextUse(activeId);
-                addRecentText({ title, body: body.trim() });
+                addRecentText({ title: deriveTitle(), body: body.trim() });
               }}
             >
               <Icon name="play" size={16} />{live ? "Update live" : "Show now"}
             </button>
-            <button className="btn btn-secondary" disabled={!title.trim()} onClick={handleSave}>
-              <Icon name="check" size={16} />{activeId ? "Save changes" : "Save text"}
+
+            <button
+              className="btn btn-secondary"
+              disabled={!title.trim() && !body.trim()}
+              onClick={() => handleSave({ asNew: true, alsoShow: false })}
+            >
+              <Icon name="plus" size={16} />{activeId ? "Save as New Text" : "Save & Add to App"}
+            </button>
+
+            {activeId && (
+              <button
+                className="btn btn-secondary"
+                disabled={!title.trim() && !body.trim()}
+                onClick={() => handleSave({ asNew: false, alsoShow: false })}
+              >
+                <Icon name="check" size={16} />Update Existing
+              </button>
+            )}
+
+            <button
+              className="btn btn-ghost"
+              disabled={!body.trim()}
+              onClick={() => handleSave({ asNew: !activeId, alsoShow: true })}
+            >
+              Save &amp; Show Live
             </button>
           </div>
 
