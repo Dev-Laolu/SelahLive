@@ -28,14 +28,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BOOK_NAMES, BOOK_ALIASES } from "../lib/bible.js";
+import ts from "typescript";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
-
-// Import TypeScript modules by stripping TS types or using identical runtime evaluation
-// Let's load and transpile the TS modules via TypeScript's transpileModule so we test the exact TS source files!
-import ts from "typescript";
 
 function loadTsModule(relPath, injectedExports = {}) {
   const fullPath = path.join(ROOT, relPath);
@@ -44,13 +40,14 @@ function loadTsModule(relPath, injectedExports = {}) {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2020,
+      allowJs: true,
     },
   }).outputText;
 
   const module = { exports: {} };
   const customRequire = (id) => {
     if (injectedExports[id]) return injectedExports[id];
-    if (id === "@/lib/bible") return { BOOK_NAMES, BOOK_ALIASES };
+    if (id === "@/lib/bible") return loadTsModule("lib/bible.js");
     if (id.startsWith(".")) {
       const resolved = path.resolve(path.dirname(fullPath), id);
       const candidates = [

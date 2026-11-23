@@ -27,7 +27,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { isSelah } from "../lib/obs.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -39,6 +38,7 @@ function loadTsModule(relPath) {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2020,
+      allowJs: true,
     },
   }).outputText;
 
@@ -47,6 +47,8 @@ function loadTsModule(relPath) {
   fn(module.exports, () => ({}), module);
   return module.exports;
 }
+
+const { isSelah } = loadTsModule("lib/obs.js");
 
 const quoteMod = loadTsModule("src/voice/detectors/verseQuoteMatcher.ts");
 const songMod = loadTsModule("src/voice/detectors/songMatcher.ts");

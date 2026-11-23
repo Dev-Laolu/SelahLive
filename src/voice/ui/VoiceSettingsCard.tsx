@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/Icon';
 import Select from '@/components/Select';
+import { useToast } from '@/components/Toast';
 import { useApp } from '@/lib/store';
 import { useVoice } from '../VoiceContext';
 import { LevelMeter } from './LevelMeter';
@@ -14,6 +15,7 @@ import { LevelMeter } from './LevelMeter';
  */
 export function VoiceSettingsCard() {
   const { bibles, savedTexts } = useApp();
+  const toast = useToast();
   const {
     settings,
     updateVoiceSettings,
@@ -61,6 +63,11 @@ export function VoiceSettingsCard() {
     (settings.customVocabulary || []).join(', ')
   );
 
+  // Sync vocabulary input when IndexedDB voice settings finish loading
+  useEffect(() => {
+    setVocabInput((settings.customVocabulary || []).join(', '));
+  }, [settings.customVocabulary]);
+
   const handleToggleEnabled = async () => {
     if (settings.enabled) {
       await disableVoice();
@@ -106,7 +113,7 @@ export function VoiceSettingsCard() {
         <div className="col" style={{ gap: 2 }}>
           <div className="row wrap" style={{ gap: 8 }}>
             <Icon name="mic" size={18} className="gold" />
-            <h3 style={{ margin: 0 }}>Voice Suggestions (v2 Beta)</h3>
+            <h3 style={{ margin: 0 }}>Voice Suggestions (v2.0)</h3>
             {settings.enabled ? (
               isListening && !isPaused ? (
                 <span className="chip ok">
@@ -432,14 +439,11 @@ export function VoiceSettingsCard() {
           </div>
         )}
 
-        {!selectedModelInstalled && (
+        {!selectedModelInstalled && activeAsrMode !== 'browser-bridge' && (
           <div className="banner warn" style={{ fontSize: 12 }}>
             <Icon name="download" size={16} />
             <span className="grow">
-              Offline Whisper model <b>{settings.whisperModel}</b> is not downloaded yet.{' '}
-              {activeAsrMode === 'browser-bridge'
-                ? 'Using temporary browser voice engine while offline model is not installed.'
-                : 'Open Library → Voice models to download it once for offline use.'}
+              Offline Whisper model <b>{settings.whisperModel}</b> is not downloaded yet. Open Library → Voice models to download it once for offline use.
             </span>
             <Link href="/app/library?tab=voice" className="btn btn-primary btn-sm">
               Open Library
@@ -747,13 +751,14 @@ export function VoiceSettingsCard() {
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => {
+                onClick={async () => {
                   const list = vocabInput
                     .split(',')
                     .map((w) => w.trim())
                     .filter(Boolean)
                     .slice(0, 100);
-                  updateVoiceSettings({ customVocabulary: list });
+                  await updateVoiceSettings({ customVocabulary: list });
+                  toast(`Saved ${list.length} custom vocabulary ${list.length === 1 ? 'term' : 'terms'}.`);
                 }}
               >
                 Save vocabulary

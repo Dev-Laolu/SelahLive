@@ -46,14 +46,16 @@ let asrPipeline = null;
 let loadedModelId = null;
 let activeBackend = "wasm";
 let isLoadingModel = false;
+let loadingModelId = null;
+let loadingPromise = null;
 let isTranscribing = false;
 let segmentSeq = 0;
 
 // VAD & Utterance accumulator state (16 kHz mono, 512 samples = 32 ms per frame)
 const SAMPLE_RATE = 16000;
 const PRE_ROLL_MAX_FRAMES = 8;          // ~256 ms pre-roll before speech onset
-const SPEECH_RMS_ONSET = 0.013;         // Speech onset threshold
-const SPEECH_RMS_HOLD = 0.008;          // Speech continuation threshold
+const SPEECH_RMS_ONSET = 0.0075;        // Speech onset threshold (~-42.5 dBFS for laptop mics & mixers)
+const SPEECH_RMS_HOLD = 0.004;          // Speech continuation threshold (~-48 dBFS)
 const SILENCE_FRAMES_TO_FINALIZE = 13;  // ~416 ms of silence ends an utterance
 const INTERIM_INTERVAL_SAMPLES = 28800; // ~1.8 s of speech triggers an interim decode (disabled in performanceMode)
 const MAX_UTTERANCE_SAMPLES = 104000;   // ~6.5 s max utterance before forced final decode
@@ -119,6 +121,10 @@ async function getTransformers() {
     if (transformersLib.env) {
       transformersLib.env.allowLocalModels = false;
       transformersLib.env.useBrowserCache = true;
+      // Suppress noisy ORT VerifyEachNodeIsAssignedToAnEp console warnings
+      if (transformersLib.env.backends && transformersLib.env.backends.onnx) {
+        transformersLib.env.backends.onnx.logLevel = "error";
+      }
     }
   }
   return transformersLib;
@@ -137,7 +143,6 @@ async function detectWebGpuAvailable() {
 }
 
 async function loadWhisperModel(modelId, explicitRepo) {
-  if (isLoadingModel) return false;
   const repo = explicitRepo || MODEL_REPOS[modelId] || MODEL_REPOS["base.en"];
 
   if (asrPipeline && loadedModelId === modelId) {
@@ -150,7 +155,18 @@ async function loadWhisperModel(modelId, explicitRepo) {
     return true;
   }
 
+  // Deduplicate concurrent load calls for the same model so ONNX never loads twice simultaneously
+  if (isLoadingModel && loadingPromise) {
+    if (loadingModelId === modelId) {
+      return loadingPromise;
+    }
+    try {
+      await loadingPromise;
+    } catch {}
+  }
+
   isLoadingModel = true;
+  loadingModelId = modelId;
   self.postMessage({
     type: "model-status",
     status: "loading-model",
@@ -188,61 +204,71 @@ async function loadWhisperModel(modelId, explicitRepo) {
     }
   };
 
-  try {
-    const { pipeline } = await getTransformers();
-    const hasWebGpu = await detectWebGpuAvailable();
-    let pipe = null;
-    let backendUsed = "wasm";
+  loadingPromise = (async () => {
+    try {
+      const { pipeline } = await getTransformers();
+      const hasWebGpu = await detectWebGpuAvailable();
+      let pipe = null;
+      let backendUsed = "wasm";
 
-    if (hasWebGpu) {
-      try {
+      if (hasWebGpu) {
+        try {
+          pipe = await pipeline("automatic-speech-recognition", repo, {
+            device: "webgpu",
+            dtype: {
+              encoder_model: "fp32",
+              decoder_model_merged: "q4",
+            },
+            session_options: { logSeverityLevel: 3 },
+            progress_callback: progressCallback,
+          });
+          backendUsed = "webgpu";
+        } catch {
+          pipe = null;
+        }
+      }
+
+      if (!pipe) {
         pipe = await pipeline("automatic-speech-recognition", repo, {
-          device: "webgpu",
-          dtype: {
-            encoder_model: "fp32",
-            decoder_model_merged: "q4",
-          },
+          device: "wasm",
+          dtype: "q8",
+          session_options: { logSeverityLevel: 3 },
           progress_callback: progressCallback,
         });
-        backendUsed = "webgpu";
-      } catch {
-        pipe = null;
+        backendUsed = "wasm";
       }
-    }
 
-    if (!pipe) {
-      pipe = await pipeline("automatic-speech-recognition", repo, {
-        device: "wasm",
-        dtype: "q8",
-        progress_callback: progressCallback,
+      asrPipeline = pipe;
+      loadedModelId = modelId;
+      activeBackend = backendUsed;
+      isLoadingModel = false;
+      loadingModelId = null;
+      loadingPromise = null;
+
+      self.postMessage({
+        type: "model-ready",
+        modelId,
+        hfRepo: repo,
+        backend: backendUsed,
       });
-      backendUsed = "wasm";
+      return true;
+    } catch (err) {
+      isLoadingModel = false;
+      loadingModelId = null;
+      loadingPromise = null;
+      const message =
+        (err && err.message) ||
+        `Could not load Whisper model (${modelId}). Check your internet connection for first download.`;
+      self.postMessage({
+        type: "model-error",
+        modelId,
+        error: message,
+      });
+      return false;
     }
+  })();
 
-    asrPipeline = pipe;
-    loadedModelId = modelId;
-    activeBackend = backendUsed;
-    isLoadingModel = false;
-
-    self.postMessage({
-      type: "model-ready",
-      modelId,
-      hfRepo: repo,
-      backend: backendUsed,
-    });
-    return true;
-  } catch (err) {
-    isLoadingModel = false;
-    const message =
-      (err && err.message) ||
-      `Could not load Whisper model (${modelId}). Check your internet connection for first download.`;
-    self.postMessage({
-      type: "model-error",
-      modelId,
-      error: message,
-    });
-    return false;
-  }
+  return loadingPromise;
 }
 
 /**

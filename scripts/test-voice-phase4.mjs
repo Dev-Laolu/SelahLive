@@ -28,7 +28,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import ts from "typescript";
-import { BOOK_NAMES, BOOK_ALIASES } from "../lib/bible.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -40,13 +39,14 @@ function loadTsModule(relPath, injectedExports = {}) {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2020,
+      allowJs: true,
     },
   }).outputText;
 
   const module = { exports: {} };
   const customRequire = (id) => {
     if (injectedExports[id]) return injectedExports[id];
-    if (id === "@/lib/bible") return { BOOK_NAMES, BOOK_ALIASES };
+    if (id === "@/lib/bible") return loadTsModule("lib/bible.js");
     if (id.startsWith(".")) {
       const resolved = path.resolve(path.dirname(fullPath), id);
       const candidates = [resolved + ".ts", resolved + "/index.ts"];

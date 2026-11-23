@@ -68,7 +68,7 @@ import {
 } from './detectors';
 import { SuggestionEngine } from './suggestions/suggestionEngine';
 import { sanitizeTranscriptText } from './suggestions/safety';
-import { resolveSuggestionView } from './ui/SuggestionTray';
+import { resolveSuggestionView } from './suggestions/resolver';
 
 export type ActiveAsrMode =
   | 'idle'
@@ -302,6 +302,12 @@ export function VoiceProvider({
   const [modelDownloadProgress, setModelDownloadProgress] = useState<
     Record<WhisperModelId, number>
   >({} as Record<WhisperModelId, number>);
+  const modelDownloadProgressRef = useRef<Record<WhisperModelId, number>>(
+    {} as Record<WhisperModelId, number>
+  );
+  useEffect(() => {
+    modelDownloadProgressRef.current = modelDownloadProgress;
+  }, [modelDownloadProgress]);
   const [modelError, setModelError] = useState<string>('');
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -877,7 +883,7 @@ export function VoiceProvider({
       client.resume();
 
       const installedIds = Object.keys(installedModelsRef.current) as WhisperModelId[];
-      const isDownloadingAny = Object.keys(modelDownloadProgress).length > 0;
+      const isDownloadingAny = Object.keys(modelDownloadProgressRef.current).length > 0;
 
       const decision = selectActiveAsrEngine({
         preferredEngine: cfg.engine,
@@ -961,7 +967,7 @@ export function VoiceProvider({
       );
       setActiveEngineDetail(decision.notice);
     },
-    [ensureWorker, handleIncomingSegment, modelDownloadProgress]
+    [ensureWorker, handleIncomingSegment]
   );
 
   useEffect(() => {
