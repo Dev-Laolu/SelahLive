@@ -11,7 +11,7 @@ import { gunzipSync, unzipSync } from "fflate";
 
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
-const APP_VERSION = "1.2.1";
+const APP_VERSION = "2.0.0";
 
 const STARTER_SAVED_TEXTS = [
   {

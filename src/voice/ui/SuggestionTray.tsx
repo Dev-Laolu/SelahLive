@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/Icon';
+import { useApp } from '@/lib/store';
 import { BOOK_NAMES, getVerse } from '@/lib/bible';
 import { useVoice, isEditableElementFocused } from '../VoiceContext';
 import type {
@@ -194,6 +195,7 @@ export function SuggestionTray({
   onOperatorShow,
   onOperatorPreview,
 }: SuggestionTrayProps) {
+  const { style } = useApp() || {};
   const {
     settings,
     isListening,
@@ -207,6 +209,8 @@ export function SuggestionTray({
     markSuggestionActed,
     togglePinSuggestion,
   } = useVoice();
+
+  const reduceMotion = Boolean(style?.reduceMotion);
 
   const visibleSuggestions = (
     filterKind ? suggestions.filter((s) => s.kind === filterKind) : suggestions
@@ -228,7 +232,7 @@ export function SuggestionTray({
             savedTexts,
           });
           onOperatorShow(resolved);
-          markSuggestionActed(sug.id);
+          markSuggestionActed(sug.id, 'show');
         },
         onPreview: (sug) => {
           const resolved = resolveSuggestionView(sug, {
@@ -239,9 +243,10 @@ export function SuggestionTray({
             savedTexts,
           });
           onOperatorPreview(resolved);
+          markSuggestionActed(sug.id, 'preview');
         },
         onDismiss: (id) => {
-          markSuggestionActed(id);
+          markSuggestionActed(id, 'dismiss');
         },
       });
     },
@@ -309,11 +314,14 @@ export function SuggestionTray({
   return (
     <section
       className="card col"
+      role="region"
       aria-label="Suggested from voice"
+      aria-live="polite"
       style={{
         gap: 10,
         padding: 12,
         borderColor: visibleSuggestions.length > 0 ? 'var(--gold)' : 'var(--border)',
+        transition: reduceMotion ? 'none' : 'border-color 150ms ease',
       }}
     >
       <div className="row between wrap" style={{ gap: 8 }}>

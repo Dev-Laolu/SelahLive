@@ -7,12 +7,15 @@ import Select from "@/components/Select";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { OBS_ERRORS } from "@/lib/obs";
+import { useVoice } from "@/src/voice/VoiceContext";
+import { formatBytes, getCatalogEntry } from "@/src/voice/asr/voiceModels";
 
 const STEPS = ["Welcome", "OBS", "Connect", "Overlay", "Libraries", "Keep running"];
 
 export default function Setup() {
   const router = useRouter(); const { user } = useAuth();
   const app = useApp(); const { obs, obsConf, saveObsConf, obsStatus, obsError, connectObs, manifest, packs, installPack, downloads, finishSetup } = app;
+  const { recommendedModel, recommendationReason, installedModels, probedModelSizes, modelDownloadProgress, downloadVoiceModel } = useVoice();
   const [step, setStep] = useState(0);
   const [pw, setPw] = useState(""); const [show, setShow] = useState(false);
   const [scenes, setScenes] = useState([]); const [scene, setScene] = useState("");
@@ -74,7 +77,32 @@ export default function Setup() {
           <p className="muted" style={{ margin: 0 }}>These work offline once downloaded. You can skip and do this later in Library.</p>
           <div className="grid2">{lib.length === 0 && <div className="muted">Couldn't load the list. You can download later from Library.</div>}{lib.map((e) => { const have = packs.find((p) => p.id === e.id && p.type === e.type); const pct = downloads[e.id]; return <div key={e.id} className="card raised col" style={{ gap: 8 }}><span className="chip" style={{ alignSelf: "flex-start" }}>{e.type === "bible" ? "Recommended Bible" : "Starter song pack"}</span><b>{e.name}</b><span className="muted">{e.language}</span>
             {pct != null && <div className="progress"><i style={{ width: pct * 100 + "%" }} /></div>}
-            {have ? <span className="chip ok" style={{ alignSelf: "flex-start" }}><Icon name="check" size={14} />Downloaded</span> : <button className="btn btn-primary btn-sm" style={{ alignSelf: "flex-start" }} disabled={pct != null} onClick={() => installPack(e)}><Icon name="download" size={14} />Download</button>}</div>; })}</div></div>}
+            {have ? <span className="chip ok" style={{ alignSelf: "flex-start" }}><Icon name="check" size={14} />Downloaded</span> : <button className="btn btn-primary btn-sm" style={{ alignSelf: "flex-start" }} disabled={pct != null} onClick={() => installPack(e)}><Icon name="download" size={14} />Download</button>}</div>; })}
+          {(() => {
+            const vm = getCatalogEntry(recommendedModel || "base.en");
+            const haveVm = Boolean(installedModels[vm.id]);
+            const vmPct = modelDownloadProgress[vm.id];
+            const sizeInfo = probedModelSizes[vm.id];
+            const realBytes = sizeInfo?.sizeBytes || vm.fallbackSizeBytes;
+            return (
+              <div className="card raised col" style={{ gap: 8, gridColumn: "1 / -1" }}>
+                <div className="row between wrap" style={{ gap: 8 }}>
+                  <span className="chip gold" style={{ alignSelf: "flex-start" }}><Icon name="mic" size={13} />Optional Offline Voice Assistant ({vm.id})</span>
+                  <span className="muted mono" style={{ fontSize: 12 }}>{sizeInfo?.isExact ? "" : "~"}{formatBytes(realBytes)}</span>
+                </div>
+                <b>{vm.name} — Suggests Bible verses &amp; slides when the pastor speaks</b>
+                <span className="muted" style={{ fontSize: 13 }}>{recommendationReason} Runs 100% on-device. Nothing is ever displayed automatically.</span>
+                {vmPct != null && <div className="progress"><i style={{ width: Math.max(3, Math.round(vmPct * 100)) + "%" }} /></div>}
+                {haveVm ? (
+                  <span className="chip ok" style={{ alignSelf: "flex-start" }}><Icon name="check" size={14} />Voice model cached offline</span>
+                ) : (
+                  <button className="btn btn-secondary btn-sm" style={{ alignSelf: "flex-start" }} disabled={vmPct != null} onClick={() => downloadVoiceModel(vm.id)}>
+                    <Icon name="download" size={14} />{vmPct != null ? `Downloading ${Math.round(vmPct * 100)}%…` : `Download ${vm.name} (${formatBytes(realBytes)})`}
+                  </button>
+                )}
+              </div>
+            );
+          })()}</div></div>}
 
         {step === 5 && <div className="col"><span className="gold label">Step 6 of 6</span><h1 style={{ fontSize: 30 }}>Keep it running</h1>
           <p className="muted" style={{ margin: 0 }}>Selah Live must be open to send verses to OBS. It can't run in the background once closed.</p>

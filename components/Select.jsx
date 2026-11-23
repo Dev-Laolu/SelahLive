@@ -19,6 +19,7 @@ import Icon from "./Icon";
  *  - className?: string
  *  - style?: object
  */
+
 export default function Select({
   value,
   onChange,

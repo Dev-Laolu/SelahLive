@@ -80,6 +80,12 @@ export type ActiveAsrMode =
   | 'awaiting-model'
   | 'unavailable';
 
+export interface SuggestionFeedbackCounters {
+  shownCount: number;
+  previewedCount: number;
+  dismissedCount: number;
+}
+
 export interface VoiceContextValue {
   settings: VoiceSettings;
   updateVoiceSettings: (patch: Partial<VoiceSettings>) => Promise<void>;
@@ -126,9 +132,11 @@ export interface VoiceContextValue {
   transcript: TranscriptSegment[];
   clearTranscript: () => void;
   suggestions: Suggestion[];
-  markSuggestionActed: (id: string) => void;
+  markSuggestionActed: (id: string, actionType?: 'show' | 'preview' | 'dismiss') => void;
   togglePinSuggestion: (id: string) => void;
   ingestTranscriptText: (text: string, isFinal?: boolean) => void;
+  feedbackCounters: SuggestionFeedbackCounters;
+  resetFeedbackCounters: () => Promise<void>;
 
   // Phase 3 — Trigger Rules (MD-6) & Service Context (MD-7)
   triggerRules: TriggerRule[];
@@ -301,6 +309,16 @@ export function VoiceProvider({
   // Phase 3 state: Trigger Rules (MD-6) & Service Context (MD-7)
   const [triggerRules, setTriggerRules] = useState<TriggerRule[]>([]);
   const [serviceContext, setServiceContext] = useState<string[]>([]);
+  const [feedbackCounters, setFeedbackCounters] = useState<SuggestionFeedbackCounters>({
+    shownCount: 0,
+    previewedCount: 0,
+    dismissedCount: 0,
+  });
+  const feedbackCountersRef = useRef<SuggestionFeedbackCounters>({
+    shownCount: 0,
+    previewedCount: 0,
+    dismissedCount: 0,
+  });
 
   const allSongsNormalized: SongForVoiceMatch[] = useMemo(() => {
     const out: SongForVoiceMatch[] = [];
@@ -660,6 +678,7 @@ export function VoiceProvider({
         savedSpeedCheck,
         savedTriggers,
         savedSvcCtx,
+        savedFeedback,
         hw,
       ] = await Promise.all([
         getKey('settings', 'voice', null),
@@ -667,11 +686,22 @@ export function VoiceProvider({
         getKey('settings', 'voiceSpeedCheck', null),
         getKey('settings', 'voiceTriggers', []),
         getKey('settings', 'voiceServiceContext', []),
+        getKey('settings', 'voiceFeedbackCounters', null),
         detectHardwareProfile(),
       ]);
 
       setHardwareProfile(hw);
       hardwareProfileRef.current = hw;
+
+      if (savedFeedback && typeof savedFeedback === 'object') {
+        const mergedFb: SuggestionFeedbackCounters = {
+          shownCount: Number(savedFeedback.shownCount) || 0,
+          previewedCount: Number(savedFeedback.previewedCount) || 0,
+          dismissedCount: Number(savedFeedback.dismissedCount) || 0,
+        };
+        setFeedbackCounters(mergedFb);
+        feedbackCountersRef.current = mergedFb;
+      }
 
       if (Array.isArray(savedTriggers)) {
         setTriggerRules(savedTriggers);
@@ -1356,9 +1386,36 @@ export function VoiceProvider({
     setTranscript([]);
   }, []);
 
-  const markSuggestionActed = useCallback((id: string) => {
-    const next = suggestionEngineRef.current.markShownOrDismissed(id, Date.now());
-    setSuggestions(next);
+  const markSuggestionActed = useCallback(
+    (id: string, actionType: 'show' | 'preview' | 'dismiss' = 'dismiss') => {
+      // PRD §8: Store suggestion feedback counts locally only (never contains speech text)
+      const prevFb = feedbackCountersRef.current;
+      const nextFb: SuggestionFeedbackCounters = {
+        shownCount: prevFb.shownCount + (actionType === 'show' ? 1 : 0),
+        previewedCount: prevFb.previewedCount + (actionType === 'preview' ? 1 : 0),
+        dismissedCount: prevFb.dismissedCount + (actionType === 'dismiss' ? 1 : 0),
+      };
+      feedbackCountersRef.current = nextFb;
+      setFeedbackCounters(nextFb);
+      setKey('settings', 'voiceFeedbackCounters', nextFb);
+
+      if (actionType === 'show' || actionType === 'dismiss') {
+        const next = suggestionEngineRef.current.markShownOrDismissed(id, Date.now());
+        setSuggestions(next);
+      }
+    },
+    []
+  );
+
+  const resetFeedbackCounters = useCallback(async () => {
+    const zero: SuggestionFeedbackCounters = {
+      shownCount: 0,
+      previewedCount: 0,
+      dismissedCount: 0,
+    };
+    feedbackCountersRef.current = zero;
+    setFeedbackCounters(zero);
+    await setKey('settings', 'voiceFeedbackCounters', zero);
   }, []);
 
   const togglePinSuggestion = useCallback((id: string) => {
@@ -1445,6 +1502,8 @@ export function VoiceProvider({
     markSuggestionActed,
     togglePinSuggestion,
     ingestTranscriptText,
+    feedbackCounters,
+    resetFeedbackCounters,
     triggerRules,
     saveTriggerRule,
     deleteTriggerRule,

@@ -50,6 +50,8 @@ export function VoiceSettingsCard() {
     triggerRules,
     saveTriggerRule,
     deleteTriggerRule,
+    feedbackCounters,
+    resetFeedbackCounters,
   } = useVoice();
 
   const [showPermissionIntro, setShowPermissionIntro] = useState(false);
@@ -595,11 +597,32 @@ export function VoiceSettingsCard() {
           </span>
         </div>
 
-        <div className="muted" style={{ fontSize: 12 }}>
-          <b>Shortcuts:</b> <span className="kbd">Alt+1…5</span> Show suggestion ·{' '}
-          <span className="kbd">Shift+Alt+1…5</span> Preview suggestion ·{' '}
-          <span className="kbd">Alt+D</span> Dismiss top card ·{' '}
-          <span className="kbd">Alt+L</span> Pause/resume listening.
+        <div className="row between wrap" style={{ gap: 8 }}>
+          <div className="muted" style={{ fontSize: 12 }}>
+            <b>Shortcuts:</b> <span className="kbd">Alt+1…5</span> Show suggestion ·{' '}
+            <span className="kbd">Shift+Alt+1…5</span> Preview suggestion ·{' '}
+            <span className="kbd">Alt+D</span> Dismiss top card ·{' '}
+            <span className="kbd">Alt+L</span> Pause/resume listening.
+          </div>
+          {(feedbackCounters.shownCount > 0 ||
+            feedbackCounters.previewedCount > 0 ||
+            feedbackCounters.dismissedCount > 0) && (
+            <div className="row wrap" style={{ gap: 8, fontSize: 11 }}>
+              <span className="chip" style={{ fontSize: 11 }}>
+                Local stats: <b>{feedbackCounters.shownCount}</b> shown ·{' '}
+                <b>{feedbackCounters.previewedCount}</b> previewed ·{' '}
+                <b>{feedbackCounters.dismissedCount}</b> dismissed
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ minHeight: 24, padding: '2px 8px', fontSize: 11 }}
+                onClick={() => resetFeedbackCounters()}
+              >
+                Reset stats
+              </button>
+            </div>
+          )}
         </div>
 
         {/* MD-6 & ST-7: Custom Trigger Phrases & Custom Vocabulary Manager */}

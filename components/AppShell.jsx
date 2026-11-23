@@ -201,6 +201,7 @@ function ObsHelpModal({ onClose, user, churchName, currentPath }) {
 
         <div className="seg" role="tablist">
           <button role="tab" aria-pressed={tab === "guide"} onClick={() => setTab("guide")}>OBS Connection Guide</button>
+          <button role="tab" aria-pressed={tab === "voice"} onClick={() => setTab("voice")}>Voice Suggestions Guide</button>
           <button role="tab" aria-pressed={tab === "ticket"} onClick={() => setTab("ticket")}>Send Help Desk Message</button>
         </div>
 
@@ -228,6 +229,32 @@ function ObsHelpModal({ onClose, user, churchName, currentPath }) {
               </div>
             </div>
           </>
+        ) : tab === "voice" ? (
+          <div className="col" style={{ gap: 10, fontSize: 13, lineHeight: 1.5 }}>
+            <div className="card raised col" style={{ gap: 6, padding: 12 }}>
+              <b className="gold">How Voice Suggestions Work (100% On-Device &amp; Manual Control)</b>
+              <span className="muted">
+                Selah Live listens to the pastor&apos;s microphone, transcribes speech locally on your computer, and suggests Bible verses, songs, and service slides in the <b>Suggested from voice</b> tray. <b>Nothing is ever displayed automatically</b>—you always decide with one click or shortcut.
+              </span>
+            </div>
+            <ol className="col" style={{ gap: 8, margin: 0, paddingLeft: 20 }}>
+              <li><b>Download an offline Whisper model:</b> Open <b>Library → Voice models</b> and download <b>Whisper Base (`base.en`)</b> (or <b>Whisper Tiny (`tiny.en`)</b> on 4 GB laptops).</li>
+              <li><b>Choose your audio source:</b> In <b>Settings → Voice</b>, pick your microphone or USB audio interface. For best accuracy and to avoid conflicting with OBS, feed a dedicated aux/monitor line from your sound mixer into Channel 1 or 2.</li>
+              <li><b>Test &amp; start listening:</b> Click <b>Test mic (3 s)</b> to check signal health, then toggle Voice Suggestions <b>On</b>.</li>
+              <li><b>Use one-click or keyboard shortcuts:</b>
+                <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
+                  <span><span className="kbd">Alt+1…5</span> Show card 1–5</span>
+                  <span><span className="kbd">Shift+Alt+1…5</span> Preview card 1–5</span>
+                  <span><span className="kbd">Alt+D</span> Dismiss top card</span>
+                  <span><span className="kbd">Alt+L</span> Pause/resume listening</span>
+                </div>
+              </li>
+            </ol>
+            <div className="row wrap between" style={{ gap: 8, marginTop: 4 }}>
+              <Link href="/app/library?tab=voice" className="btn btn-secondary btn-sm" onClick={onClose}>Open Voice Models</Link>
+              <Link href="/app/settings#voice-settings" className="btn btn-primary btn-sm" onClick={onClose}>Open Voice Settings</Link>
+            </div>
+          </div>
         ) : sentId ? (
           <div className="col" style={{ gap: 12, padding: "12px 0" }}>
             <div className="banner ok">
