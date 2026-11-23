@@ -452,6 +452,7 @@ export function VoiceProvider({
   const handleIncomingSegment = useCallback((rawSeg: TranscriptSegment) => {
     const cleanText = sanitizeTranscriptText(rawSeg.text, 360);
     if (!cleanText) return;
+    setModelError('');
 
     const now = Date.now();
     const seg: TranscriptSegment = {
@@ -641,6 +642,7 @@ export function VoiceProvider({
           }));
         },
         onModelReady: async (info) => {
+          setModelError('');
           setModelDownloadProgress((prev) => {
             const next = { ...prev };
             delete next[info.modelId];
@@ -666,6 +668,9 @@ export function VoiceProvider({
           if (isListeningRef.current && !isPausedRef.current) {
             startAsrRef.current?.(settingsRef.current);
           }
+        },
+        onDecodeError: (info) => {
+          setModelError(info.error);
         },
       });
       client.start();

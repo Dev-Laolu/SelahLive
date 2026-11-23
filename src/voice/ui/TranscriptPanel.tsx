@@ -11,7 +11,7 @@ import { sanitizeTranscriptText } from '../suggestions/safety';
  * - Kept in memory only (last ~5 minutes), never saved or synced.
  * - Renders strictly as escaped plain text (never innerHTML) with detected scripture references highlighted as spans.
  */
-export function TranscriptPanel({ defaultOpen = false }: { defaultOpen?: boolean }) {
+export function TranscriptPanel({ defaultOpen = true }: { defaultOpen?: boolean }) {
   const { settings, isListening, isPaused, activeEngineDetail, transcript, clearTranscript } =
     useVoice();
   const [open, setOpen] = useState(defaultOpen);

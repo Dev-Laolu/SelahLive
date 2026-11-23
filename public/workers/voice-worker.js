@@ -57,9 +57,9 @@ const PRE_ROLL_MAX_FRAMES = 8;          // ~256 ms pre-roll before speech onset
 const SPEECH_RMS_ONSET = 0.0075;        // Speech onset threshold (~-42.5 dBFS for laptop mics & mixers)
 const SPEECH_RMS_HOLD = 0.004;          // Speech continuation threshold (~-48 dBFS)
 const SILENCE_FRAMES_TO_FINALIZE = 13;  // ~416 ms of silence ends an utterance
-const INTERIM_INTERVAL_SAMPLES = 28800; // ~1.8 s of speech triggers an interim decode (disabled in performanceMode)
+const INTERIM_INTERVAL_SAMPLES = 24000; // ~1.5 s of speech triggers an interim decode (disabled in performanceMode)
 const MAX_UTTERANCE_SAMPLES = 104000;   // ~6.5 s max utterance before forced final decode
-const MIN_SPEECH_SAMPLES = 8000;        // ~0.5 s minimum speech to transcribe
+const MIN_SPEECH_SAMPLES = 6400;        // ~0.4 s minimum speech to transcribe
 
 let preRollFrames = [];
 let utteranceChunks = [];
@@ -272,6 +272,17 @@ async function loadWhisperModel(modelId, explicitRepo) {
 }
 
 /**
+ * Transformers.js v3 throws if `language` or `task` is passed to an English-only
+ * Whisper model (e.g. `whisper-tiny.en`, `whisper-base.en`, `whisper-small.en`).
+ */
+function buildAsrOptions() {
+  const isEnglishOnly = !loadedModelId || String(loadedModelId).endsWith(".en");
+  return isEnglishOnly
+    ? { return_timestamps: false }
+    : { language: "english", task: "transcribe", return_timestamps: false };
+}
+
+/**
  * ST-9 First-run speed benchmark:
  * Synthesizes a 2.0-second 16 kHz clip with speech-like formant modulation,
  * runs an initial warm-up pass (to compile shaders/WASM), then times a 2.0s decode pass.
@@ -304,20 +315,13 @@ async function runSpeedBenchmark(requestedModelId) {
         0.25 * Math.sin(2 * Math.PI * 1150 * t));
   }
 
+  const opts = buildAsrOptions();
   try {
     // Short 0.5s warm-up pass so JIT / shader compilation is excluded from steady-state RTF
-    await asrPipeline(clip.subarray(0, 8000), {
-      language: "english",
-      task: "transcribe",
-      return_timestamps: false,
-    });
+    await asrPipeline(clip.subarray(0, 8000), opts);
 
     const t0 = performance.now();
-    await asrPipeline(clip, {
-      language: "english",
-      task: "transcribe",
-      return_timestamps: false,
-    });
+    await asrPipeline(clip, opts);
     const inferenceMs = Math.max(10, Math.round(performance.now() - t0));
     const rtf = Number((inferenceMs / audioDurationMs).toFixed(2));
     clip.fill(0);
@@ -364,11 +368,7 @@ async function processDecodeQueue() {
 
   try {
     const t0 = performance.now();
-    const out = await asrPipeline(job.audio, {
-      language: "english",
-      task: "transcribe",
-      return_timestamps: false,
-    });
+    const out = await asrPipeline(job.audio, buildAsrOptions());
     const inferenceMs = Math.max(1, Math.round(performance.now() - t0));
     const rtf = Number((inferenceMs / audioDurationMs).toFixed(2));
     const rawText = out && typeof out.text === "string" ? out.text : "";
@@ -405,8 +405,13 @@ async function processDecodeQueue() {
         },
       });
     }
-  } catch {
-    // Ignore transient single-utterance decode failure
+  } catch (err) {
+    job.audio.fill(0);
+    self.postMessage({
+      type: "decode-error",
+      modelId: loadedModelId,
+      error: (err && err.message) || "Whisper transcription error.",
+    });
   } finally {
     isTranscribing = false;
     if (pendingDecode && !isPaused) {
@@ -513,13 +518,15 @@ async function finishMicTest() {
   let transcriptPreview = "";
   if (asrPipeline && avgRms >= 0.003) {
     try {
-      const out = await asrPipeline(merged, {
-        language: "english",
-        task: "transcribe",
-        return_timestamps: false,
-      });
+      const out = await asrPipeline(merged, buildAsrOptions());
       transcriptPreview = cleanWhisperOutput(out && typeof out.text === "string" ? out.text : "");
-    } catch {}
+    } catch (err) {
+      self.postMessage({
+        type: "decode-error",
+        modelId: loadedModelId,
+        error: (err && err.message) || "Whisper mic test transcription error.",
+      });
+    }
   }
 
   merged.fill(0);

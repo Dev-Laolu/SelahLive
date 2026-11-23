@@ -63,6 +63,7 @@ export function SuggestionTray({
     activeAsrMode,
     activeEngineDetail,
     engineNotice,
+    modelError,
     showRetryWhisper,
     retryWhisperEngine,
     transcript,
@@ -74,10 +75,10 @@ export function SuggestionTray({
 
   const reduceMotion = Boolean(style?.reduceMotion);
   const latestSegments = transcript.slice(-3);
-  const latestText =
-    latestSegments.length > 0
-      ? sanitizeTranscriptText(latestSegments[latestSegments.length - 1].text, 240)
-      : '';
+  const latestText = latestSegments
+    .map((s) => sanitizeTranscriptText(s.text, 160))
+    .filter(Boolean)
+    .join(' · ');
 
   const visibleSuggestions = useMemo(
     () => (filterKind ? suggestions.filter((s) => s.kind === filterKind) : suggestions).slice(0, 5),
@@ -261,6 +262,13 @@ export function SuggestionTray({
           </div>
         )}
 
+      {modelError && (
+        <div className="banner bad" style={{ fontSize: 12, padding: '6px 10px' }}>
+          <Icon name="alertc" size={15} />
+          <span className="grow">{modelError}</span>
+        </div>
+      )}
+
       {/* Always-visible Live Hearing Transcript Strip so the operator sees what the voice model is hearing in real time */}
       {settings.enabled && (
         <div
@@ -275,15 +283,16 @@ export function SuggestionTray({
           }}
           aria-live="polite"
         >
-          <div className="row" style={{ gap: 8, minWidth: 0, flex: 1 }}>
+          <div className="row" style={{ gap: 8, minWidth: 0, flex: 1, alignItems: 'flex-start' }}>
             <span
               className={`dot ${
                 isListening && !isPaused
-                  ? level.db > -42
+                  ? level.db > -45
                     ? 'ok pulse'
                     : 'gold'
                   : 'warn'
               }`}
+              style={{ marginTop: 4 }}
             />
             <Icon name={isListening && !isPaused ? 'mic' : 'micoff'} size={14} className="gold" />
             <b style={{ flexShrink: 0 }}>Hearing:</b>
@@ -291,9 +300,7 @@ export function SuggestionTray({
               style={{
                 color: latestText ? 'var(--text)' : 'var(--text-2)',
                 fontStyle: latestText ? 'normal' : 'italic',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                wordBreak: 'break-word',
               }}
             >
               {latestText

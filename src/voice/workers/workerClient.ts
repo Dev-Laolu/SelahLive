@@ -41,6 +41,7 @@ export interface WorkerClientCallbacks {
   onModelProgress?: (ev: ModelProgressEvent) => void;
   onModelReady?: (info: { modelId: WhisperModelId; hfRepo: string; backend: 'webgpu' | 'wasm' }) => void;
   onModelError?: (info: { modelId: WhisperModelId; error: string }) => void;
+  onDecodeError?: (info: { modelId: WhisperModelId | null; error: string }) => void;
   onRtfMetric?: (metric: WorkerRtfMetric) => void;
 }
 
@@ -122,6 +123,11 @@ export class VoiceWorkerClient {
           this.callbacks.onModelError?.({
             modelId: d.modelId,
             error: d.error || 'Model failed to load',
+          });
+        } else if (d.type === 'decode-error') {
+          this.callbacks.onDecodeError?.({
+            modelId: d.modelId || null,
+            error: d.error || 'Whisper transcription error',
           });
         } else if (d.type === 'mic-test-complete' && this.micTestResolver) {
           const resolve = this.micTestResolver;

@@ -7,6 +7,7 @@ import Select from '@/components/Select';
 import { useToast } from '@/components/Toast';
 import { useApp } from '@/lib/store';
 import { useVoice } from '../VoiceContext';
+import { sanitizeTranscriptText } from '../suggestions/safety';
 import { LevelMeter } from './LevelMeter';
 
 /**
@@ -49,12 +50,21 @@ export function VoiceSettingsCard() {
     runFirstRunSpeedCheck,
     lastRtf,
     installedModels,
+    modelError,
+    transcript,
+    clearTranscript,
     triggerRules,
     saveTriggerRule,
     deleteTriggerRule,
     feedbackCounters,
     resetFeedbackCounters,
   } = useVoice();
+
+  const recentTranscriptText = transcript
+    .slice(-3)
+    .map((s) => sanitizeTranscriptText(s.text, 160))
+    .filter(Boolean)
+    .join(' · ');
 
   const [showPermissionIntro, setShowPermissionIntro] = useState(false);
   const [newTrgTextId, setNewTrgTextId] = useState('');
@@ -371,6 +381,68 @@ export function VoiceSettingsCard() {
             >
               <Icon name="x" size={14} />
             </button>
+          </div>
+        )}
+
+        {/* Always-visible Live Transcript Preview on Settings while Voice is enabled */}
+        {settings.enabled && (
+          <div
+            className="row between wrap"
+            style={{
+              gap: 8,
+              padding: '8px 10px',
+              borderRadius: 'var(--r-ctl)',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              fontSize: 12,
+            }}
+            aria-live="polite"
+          >
+            <div className="row" style={{ gap: 8, minWidth: 0, flex: 1, alignItems: 'flex-start' }}>
+              <span
+                className={`dot ${
+                  isListening && !isPaused
+                    ? level.db > -45
+                      ? 'ok pulse'
+                      : 'gold'
+                    : 'warn'
+                }`}
+                style={{ marginTop: 4 }}
+              />
+              <b style={{ flexShrink: 0 }}>Live transcript:</b>
+              <span
+                style={{
+                  color: recentTranscriptText ? 'var(--text)' : 'var(--text-2)',
+                  fontStyle: recentTranscriptText ? 'normal' : 'italic',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {recentTranscriptText
+                  ? `“${recentTranscriptText}”`
+                  : isListening && !isPaused
+                    ? level.db > -45
+                      ? 'Capturing speech… transcribing utterance…'
+                      : 'Listening for speech… speak into the microphone'
+                    : 'Voice listening is paused'}
+              </span>
+            </div>
+            {transcript.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ minHeight: 22, padding: '1px 6px', fontSize: 11 }}
+                onClick={clearTranscript}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
+        {modelError && (
+          <div className="banner bad" style={{ fontSize: 12 }}>
+            <Icon name="alertc" size={15} />
+            <span className="grow">{modelError}</span>
           </div>
         )}
       </div>
