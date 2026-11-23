@@ -47,6 +47,13 @@ import {
   isBrowserSpeechRecognitionSupported,
   supportsProcessLocally,
 } from './asr/browserSpeechEngine';
+import {
+  recommendWhisperModel,
+  RtfMonitor,
+  selectActiveAsrEngine,
+  type HardwareProfile,
+  type SpeedCheckResult,
+} from './asr/engineManager';
 import { parseSpokenReferences } from './detectors/spokenReferenceParser';
 import { SuggestionEngine } from './suggestions/suggestionEngine';
 import { sanitizeTranscriptText } from './suggestions/safety';
@@ -56,8 +63,10 @@ export type ActiveAsrMode =
   | 'loading-whisper'
   | 'whisper'
   | 'browser-bridge'
+  | 'browser-fallback'
   | 'browser-backup'
-  | 'awaiting-model';
+  | 'awaiting-model'
+  | 'unavailable';
 
 export interface VoiceContextValue {
   settings: VoiceSettings;
@@ -82,9 +91,19 @@ export interface VoiceContextValue {
   togglePauseListening: () => Promise<void>;
   runMicTest: () => Promise<MicTestReport | null>;
 
-  // Phase 1 — ASR, Models, Transcript, and Suggestions
+  // Phase 1 & Phase 2 — ASR, Engine Management (ST-8..ST-10), Models, Transcript, and Suggestions
   activeAsrMode: ActiveAsrMode;
   activeEngineDetail: string;
+  engineNotice: string;
+  showRetryWhisper: boolean;
+  retryWhisperEngine: () => Promise<void>;
+  hardwareProfile: HardwareProfile;
+  recommendedModel: WhisperModelId;
+  recommendationReason: string;
+  speedCheckResult: SpeedCheckResult | null;
+  isRunningSpeedCheck: boolean;
+  runFirstRunSpeedCheck: (modelId?: WhisperModelId) => Promise<SpeedCheckResult | null>;
+  lastRtf: number | null;
   modelCatalog: VoiceModelCatalogEntry[];
   installedModels: Record<WhisperModelId, InstalledVoiceModelRecord>;
   probedModelSizes: Record<WhisperModelId, { sizeBytes: number; isExact: boolean }>;
@@ -111,8 +130,8 @@ export function useVoice(): VoiceContextValue {
 }
 
 const ZERO_LEVEL: LevelReading = { rms: 0, peak: 0, db: -60, clipping: false };
-const TRANSCRIPT_RETENTION_MS = 5 * 60 * 1000; // TR-2: last ~5 minutes in memory only
-const ROLLING_WINDOW_MS = 7500;                // ST-5: ~6-8s rolling window so cross-segment references are caught
+const TRANSCRIPT_RETENTION_MS = 5 * 60 * 1000;
+const ROLLING_WINDOW_MS = 7500;
 
 export function isEditableElementFocused(target: EventTarget | null): boolean {
   if (!target || typeof target !== 'object') return false;
@@ -124,9 +143,6 @@ export function isEditableElementFocused(target: EventTarget | null): boolean {
   return false;
 }
 
-/**
- * Optional soft chime using Web Audio API oscillator (SG-6: off by default).
- */
 function playSoftChime(): void {
   if (typeof window === 'undefined') return;
   try {
@@ -138,8 +154,8 @@ function playSoftChime(): void {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.14); // A5
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.14);
     gain.gain.setValueAtTime(0.03, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.22);
     osc.connect(gain);
@@ -148,6 +164,29 @@ function playSoftChime(): void {
     osc.stop(ctx.currentTime + 0.23);
     setTimeout(() => ctx.close().catch(() => {}), 300);
   } catch {}
+}
+
+async function detectHardwareProfile(): Promise<HardwareProfile> {
+  if (typeof navigator === 'undefined') {
+    return { deviceMemoryGb: 8, hardwareConcurrency: 4, hasWebGpu: false };
+  }
+  const nav = navigator as unknown as {
+    deviceMemory?: number;
+    hardwareConcurrency?: number;
+    gpu?: { requestAdapter?: () => Promise<unknown> };
+  };
+  let hasWebGpu = false;
+  try {
+    if (nav.gpu?.requestAdapter) {
+      const adapter = await nav.gpu.requestAdapter();
+      hasWebGpu = Boolean(adapter);
+    }
+  } catch {}
+  return {
+    deviceMemoryGb: Number(nav.deviceMemory) || 8,
+    hardwareConcurrency: Number(nav.hardwareConcurrency) || 4,
+    hasWebGpu,
+  };
 }
 
 export function VoiceProvider({ children }: { children: React.ReactNode }) {
@@ -162,9 +201,20 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const [micTestCountdown, setMicTestCountdown] = useState<number>(0);
   const [micTestReport, setMicTestReport] = useState<MicTestReport | null>(null);
 
-  // Phase 1 state
+  // Phase 1 & Phase 2 state
   const [activeAsrMode, setActiveAsrMode] = useState<ActiveAsrMode>('idle');
   const [activeEngineDetail, setActiveEngineDetail] = useState<string>('');
+  const [engineNotice, setEngineNotice] = useState<string>('');
+  const [showRetryWhisper, setShowRetryWhisper] = useState<boolean>(false);
+  const [hardwareProfile, setHardwareProfile] = useState<HardwareProfile>({
+    deviceMemoryGb: 8,
+    hardwareConcurrency: 4,
+    hasWebGpu: false,
+  });
+  const [speedCheckResult, setSpeedCheckResult] = useState<SpeedCheckResult | null>(null);
+  const [isRunningSpeedCheck, setIsRunningSpeedCheck] = useState<boolean>(false);
+  const [lastRtf, setLastRtf] = useState<number | null>(null);
+
   const [installedModels, setInstalledModels] = useState<
     Record<WhisperModelId, InstalledVoiceModelRecord>
   >({} as Record<WhisperModelId, InstalledVoiceModelRecord>);
@@ -186,6 +236,10 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const installedModelsRef = useRef<Record<WhisperModelId, InstalledVoiceModelRecord>>(
     {} as Record<WhisperModelId, InstalledVoiceModelRecord>
   );
+  const whisperFailedModelsRef = useRef<Set<WhisperModelId>>(new Set());
+  const whisperSlowModelsRef = useRef<Set<WhisperModelId>>(new Set());
+  const rtfMonitorRef = useRef<RtfMonitor>(new RtfMonitor());
+  const hardwareProfileRef = useRef<HardwareProfile>(hardwareProfile);
   const captureRef = useRef<AudioCaptureSession | null>(null);
   const workerRef = useRef<VoiceWorkerClient | null>(null);
   const browserEngineRef = useRef<BrowserSpeechEngine | null>(null);
@@ -195,6 +249,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const isPausedRef = useRef<boolean>(false);
   const testBufferRef = useRef<Float32Array[]>([]);
   const isTestingRef = useRef<boolean>(false);
+  const startAsrRef = useRef<((cfg: VoiceSettings) => Promise<void>) | null>(null);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -204,20 +259,16 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     installedModelsRef.current = installedModels;
   }, [installedModels]);
 
+  useEffect(() => {
+    hardwareProfileRef.current = hardwareProfile;
+  }, [hardwareProfile]);
+
   const refreshDevices = useCallback(async (): Promise<AudioInputDevice[]> => {
     const list = await listAudioInputDevices();
     setDevices(list);
     return list;
   }, []);
 
-  /**
-   * Processes an incoming transcript segment (interim or final) from Whisper or Browser ASR:
-   * 1. Appends/updates the in-memory transcript stream (trimmed to last 5 minutes: TR-2).
-   * 2. Combines a 6-8 second rolling window of recent segments (ST-5) so references split across
-   *    two utterances (e.g. "Turn to Romans chapter 8" ... "verse 28") are detected seamlessly.
-   * 3. Runs the Spoken Reference Parser (MD-1..MD-3) and feeds the Suggestion Engine (SG-1..SG-6).
-   * 4. NEVER triggers any broadcast display action (SG-3).
-   */
   const handleIncomingSegment = useCallback((rawSeg: TranscriptSegment) => {
     const cleanText = sanitizeTranscriptText(rawSeg.text, 360);
     if (!cleanText) return;
@@ -230,7 +281,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       startMs: rawSeg.startMs || now - 1200,
     };
 
-    // Update in-memory transcript (merge interim with same id, prune > 5 minutes)
     const cutoff = now - TRANSCRIPT_RETENTION_MS;
     const prevList = transcriptRef.current.filter((t) => t.endMs >= cutoff);
     const existingIdx = prevList.findIndex((t) => t.id === seg.id);
@@ -238,9 +288,12 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     if (existingIdx >= 0) {
       nextList = prevList.map((t, i) => (i === existingIdx ? seg : t));
     } else {
-      // Also replace trailing non-final segment if this is a newer segment from the same engine
       const lastIdx = prevList.length - 1;
-      if (lastIdx >= 0 && !prevList[lastIdx].isFinal && seg.id.split('-')[0] === prevList[lastIdx].id.split('-')[0]) {
+      if (
+        lastIdx >= 0 &&
+        !prevList[lastIdx].isFinal &&
+        seg.id.split('-')[0] === prevList[lastIdx].id.split('-')[0]
+      ) {
         nextList = [...prevList.slice(0, lastIdx), seg];
       } else {
         nextList = [...prevList, seg].slice(-80);
@@ -249,13 +302,11 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     transcriptRef.current = nextList;
     setTranscript(nextList);
 
-    // Build rolling 7.5-second window + current segment for cross-utterance detection (ST-5)
     const recentWindowSegments = nextList.filter(
       (t) => now - t.endMs <= ROLLING_WINDOW_MS
     );
     const rollingText = recentWindowSegments.map((t) => t.text).join(' ');
 
-    // Parse spoken scripture references from both current segment and rolling window
     const directRefs = parseSpokenReferences(seg.text);
     const rollingRefs = parseSpokenReferences(rollingText);
     const allRefs = [...directRefs];
@@ -308,6 +359,21 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         onTranscriptSegment: (seg) => {
           handleIncomingSegment(seg);
         },
+        onRtfMetric: (metric) => {
+          setLastRtf(metric.rtf);
+          const check = rtfMonitorRef.current.recordUtterance(
+            metric.audioDurationMs,
+            metric.inferenceMs
+          );
+          // ST-8.3: If sustained RTF > 1.0 over 3 consecutive utterances, mark model slow and re-run ST-8 selection between utterances
+          if (check.isSustainedSlow && metric.modelId) {
+            whisperSlowModelsRef.current.add(metric.modelId);
+            rtfMonitorRef.current.reset();
+            if (isListeningRef.current && !isPausedRef.current) {
+              startAsrRef.current?.(settingsRef.current);
+            }
+          }
+        },
         onModelProgress: (ev) => {
           setModelDownloadProgress((prev) => ({
             ...prev,
@@ -324,7 +390,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
           setActiveEngineDetail(
             `Whisper ${info.modelId} (${info.backend.toUpperCase()})`
           );
-          // If Browser bridge was temporarily running while Whisper loaded, stop browser bridge between utterances (ST-8.2, ST-10)
+          // ST-8.2 & ST-10: Automatically stop temporary browser bridge between utterances when Whisper is ready
           if (browserEngineRef.current) {
             await browserEngineRef.current.destroy();
             browserEngineRef.current = null;
@@ -337,25 +403,47 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
             return next;
           });
           setModelError(info.error);
+          whisperFailedModelsRef.current.add(info.modelId);
+          if (isListeningRef.current && !isPausedRef.current) {
+            startAsrRef.current?.(settingsRef.current);
+          }
         },
       });
       client.start();
+      client.setPerformanceMode(Boolean(settingsRef.current.performanceMode));
       workerRef.current = client;
     }
     return workerRef.current;
   }, [handleIncomingSegment]);
 
-  // Boot: load voice settings, installed models, and probe real Hugging Face model sizes
+  // Boot: load voice settings, installed models, speed check history, hardware profile, and probe HF sizes
   useEffect(() => {
     (async () => {
-      const [savedVoice, savedModels] = await Promise.all([
+      const [savedVoice, savedModels, savedSpeedCheck, hw] = await Promise.all([
         getKey('settings', 'voice', null),
         getInstalledVoiceModels(),
+        getKey('settings', 'voiceSpeedCheck', null),
+        detectHardwareProfile(),
       ]);
+
+      setHardwareProfile(hw);
+      hardwareProfileRef.current = hw;
+
+      if (savedSpeedCheck && typeof savedSpeedCheck === 'object') {
+        setSpeedCheckResult(savedSpeedCheck as SpeedCheckResult);
+      }
+
       if (savedModels) {
         setInstalledModels(savedModels);
         installedModelsRef.current = savedModels;
       }
+
+      const rec = recommendWhisperModel(
+        hw,
+        (savedSpeedCheck as SpeedCheckResult | null)?.rtf,
+        (savedSpeedCheck as SpeedCheckResult | null)?.testedModelId
+      );
+
       if (savedVoice && typeof savedVoice === 'object') {
         const merged: VoiceSettings = {
           ...DEFAULT_VOICE_SETTINGS,
@@ -367,10 +455,18 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
           setIsPaused(true);
           isPausedRef.current = true;
         }
+      } else {
+        // First run: apply hardware-recommended Whisper model ('base.en' default, 'tiny.en' on 4GB weak laptops)
+        const initial: VoiceSettings = {
+          ...DEFAULT_VOICE_SETTINGS,
+          whisperModel: rec.recommendedModel,
+        };
+        setSettings(initial);
+        settingsRef.current = initial;
       }
+
       await refreshDevices();
 
-      // Probe real quantised download sizes from Hugging Face Hub API (ST-4)
       for (const m of VOICE_MODELS_CATALOG) {
         probeRealModelSizeBytes(m.id).then((res) => {
           setProbedModelSizes((prev) => ({ ...prev, [m.id]: res }));
@@ -379,7 +475,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refreshDevices]);
 
-  // Periodically prune expired suggestions (every 2 seconds: SG-4 60s expiry)
+  // Periodically prune expired suggestions (SG-4 60s expiry)
   useEffect(() => {
     const timer = setInterval(() => {
       if (suggestionEngineRef.current.pruneExpired(Date.now())) {
@@ -389,7 +485,168 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Explicit model download triggered by the user in Library -> Voice models (ST-4)
+  /**
+   * ST-9 First-run Speed Check: runs a 2.0s synthetic benchmark clip on the loaded Whisper model,
+   * computes Real-Time Factor (`RTF`), recommends `base.en` / `tiny.en` / `small.en`, and persists the result locally.
+   */
+  const runFirstRunSpeedCheck = useCallback(
+    async (modelId?: WhisperModelId): Promise<SpeedCheckResult | null> => {
+      const targetModel: WhisperModelId =
+        modelId || settingsRef.current.whisperModel || 'base.en';
+      setIsRunningSpeedCheck(true);
+      try {
+        const client = ensureWorker();
+        const bench = await client.runSpeedBenchmark(targetModel);
+        const rec = recommendWhisperModel(
+          hardwareProfileRef.current,
+          bench.rtf,
+          bench.modelId
+        );
+        const result: SpeedCheckResult = {
+          testedModelId: bench.modelId,
+          backend: bench.backend,
+          audioDurationMs: bench.audioDurationMs,
+          inferenceMs: bench.inferenceMs,
+          rtf: bench.rtf,
+          recommendedModel: rec.recommendedModel,
+          summary: rec.reason,
+          timestamp: new Date().toISOString(),
+        };
+        setSpeedCheckResult(result);
+        setLastRtf(bench.rtf);
+        await setKey('settings', 'voiceSpeedCheck', result);
+
+        // If the speed check on base.en came back slow (> 0.9 RTF), auto-select tiny.en (per owner instruction)
+        if (
+          bench.modelId === 'base.en' &&
+          bench.rtf > 0.9 &&
+          rec.recommendedModel === 'tiny.en'
+        ) {
+          const next = { ...settingsRef.current, whisperModel: 'tiny.en' as const };
+          setSettings(next);
+          settingsRef.current = next;
+          await setKey('settings', 'voice', next);
+        }
+
+        setIsRunningSpeedCheck(false);
+        return result;
+      } catch (err) {
+        setModelError(
+          (err as { message?: string })?.message || 'Speed check failed.'
+        );
+        setIsRunningSpeedCheck(false);
+        return null;
+      }
+    },
+    [ensureWorker]
+  );
+
+  /**
+   * ST-8 Auto Engine Selection execution:
+   * Evaluates `selectActiveAsrEngine` and seamlessly activates Whisper or Browser bridge/fallback
+   * without clearing suggestions or interrupting live output (ST-10).
+   */
+  const startAsrForSettings = useCallback(
+    async (cfg: VoiceSettings) => {
+      const client = ensureWorker();
+      client.setPerformanceMode(Boolean(cfg.performanceMode));
+      client.resume();
+
+      const installedIds = Object.keys(installedModelsRef.current) as WhisperModelId[];
+      const isDownloadingAny = Object.keys(modelDownloadProgress).length > 0;
+
+      const decision = selectActiveAsrEngine({
+        preferredEngine: cfg.engine,
+        preferredWhisperModel: cfg.whisperModel || 'base.en',
+        performanceMode: Boolean(cfg.performanceMode),
+        installedModels: installedIds,
+        whisperFailedModels: Array.from(whisperFailedModelsRef.current),
+        whisperSlowModels: Array.from(whisperSlowModelsRef.current),
+        browserSupported: isBrowserSpeechRecognitionSupported(),
+        browserProcessLocally: supportsProcessLocally(),
+        allowCloudBrowserEngine: Boolean(cfg.allowCloudBrowserEngine),
+        isDownloadingWhisper: isDownloadingAny,
+      });
+
+      setEngineNotice(decision.notice);
+      setShowRetryWhisper(decision.showRetryWhisper);
+
+      if (decision.targetEngine === 'whisper' && decision.targetWhisperModel) {
+        const targetModel = decision.targetWhisperModel;
+        setActiveAsrMode('loading-whisper');
+        setActiveEngineDetail(`Loading Whisper ${targetModel}…`);
+        try {
+          const entry = getCatalogEntry(targetModel);
+          await client.downloadOrLoadModel(targetModel, entry.hfRepo);
+          return;
+        } catch {
+          whisperFailedModelsRef.current.add(targetModel);
+          // Re-evaluate fallback immediately
+          const retryDecision = selectActiveAsrEngine({
+            preferredEngine: cfg.engine,
+            preferredWhisperModel: cfg.whisperModel || 'base.en',
+            performanceMode: Boolean(cfg.performanceMode),
+            installedModels: installedIds,
+            whisperFailedModels: Array.from(whisperFailedModelsRef.current),
+            whisperSlowModels: Array.from(whisperSlowModelsRef.current),
+            browserSupported: isBrowserSpeechRecognitionSupported(),
+            browserProcessLocally: supportsProcessLocally(),
+            allowCloudBrowserEngine: Boolean(cfg.allowCloudBrowserEngine),
+            isDownloadingWhisper: isDownloadingAny,
+          });
+          setEngineNotice(retryDecision.notice);
+          setShowRetryWhisper(retryDecision.showRetryWhisper);
+          if (retryDecision.targetEngine !== 'browser') {
+            setActiveAsrMode('unavailable');
+            setActiveEngineDetail(retryDecision.notice);
+            return;
+          }
+        }
+      }
+
+      if (decision.targetEngine === 'browser') {
+        if (!browserEngineRef.current) {
+          browserEngineRef.current = new BrowserSpeechEngine();
+        }
+        const mode: ActiveAsrMode =
+          decision.mode === 'browser-bridge'
+            ? 'browser-bridge'
+            : decision.mode === 'browser-fallback'
+              ? 'browser-fallback'
+              : 'browser-backup';
+        setActiveAsrMode(mode);
+        setActiveEngineDetail(decision.notice);
+
+        await browserEngineRef.current.init(cfg, {
+          onSegment: (seg) => handleIncomingSegment(seg),
+          onStatusChange: (_st, detail) => {
+            if (detail && mode === 'browser-backup') {
+              setActiveEngineDetail(detail);
+            }
+          },
+          onError: (msg) => setModelError(msg),
+        });
+        return;
+      }
+
+      // targetEngine === 'none'
+      if (browserEngineRef.current) {
+        await browserEngineRef.current.destroy();
+        browserEngineRef.current = null;
+      }
+      setActiveAsrMode(
+        decision.mode === 'awaiting-model' ? 'awaiting-model' : 'unavailable'
+      );
+      setActiveEngineDetail(decision.notice);
+    },
+    [ensureWorker, handleIncomingSegment, modelDownloadProgress]
+  );
+
+  useEffect(() => {
+    startAsrRef.current = startAsrForSettings;
+  }, [startAsrForSettings]);
+
+  // Explicit model download triggered by user in Library -> Voice models (ST-4, ST-8.2, ST-9)
   const downloadVoiceModel = useCallback(
     async (modelId: WhisperModelId): Promise<boolean> => {
       setModelError('');
@@ -411,6 +668,20 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         });
         setInstalledModels(updated);
         installedModelsRef.current = updated;
+        whisperFailedModelsRef.current.delete(modelId);
+        whisperSlowModelsRef.current.delete(modelId);
+
+        // ST-9: On first model download, run the quick speed check benchmark automatically
+        const existingSpeedCheck = await getKey('settings', 'voiceSpeedCheck', null);
+        if (!existingSpeedCheck) {
+          await runFirstRunSpeedCheck(modelId);
+        }
+
+        // ST-8.2 & ST-10: If voice is currently listening on the temporary browser bridge, switch to Whisper automatically between utterances!
+        if (isListeningRef.current && !isPausedRef.current) {
+          await startAsrForSettings(settingsRef.current);
+        }
+
         return true;
       } catch (err) {
         setModelError(
@@ -420,105 +691,40 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
     },
-    [ensureWorker, probedModelSizes]
+    [ensureWorker, probedModelSizes, runFirstRunSpeedCheck, startAsrForSettings]
   );
 
-  const removeVoiceModel = useCallback(async (modelId: WhisperModelId) => {
-    workerRef.current?.unloadModel(modelId);
-    const updated = await removeInstalledVoiceModel(modelId);
-    setInstalledModels(updated);
-    installedModelsRef.current = updated;
-  }, []);
+  const removeVoiceModel = useCallback(
+    async (modelId: WhisperModelId) => {
+      workerRef.current?.unloadModel(modelId);
+      const updated = await removeInstalledVoiceModel(modelId);
+      setInstalledModels(updated);
+      installedModelsRef.current = updated;
+      if (isListeningRef.current && !isPausedRef.current) {
+        await startAsrForSettings(settingsRef.current);
+      }
+    },
+    [startAsrForSettings]
+  );
 
   /**
-   * Starts the selected ASR engine (ST-1, ST-8):
-   * - Primary: Whisper in Web Worker if the selected (or any installed) Whisper model is downloaded.
-   * - Backup / First-run bridge: Browser SpeechRecognition if Whisper model isn't downloaded yet
-   *   (or if engine === 'browser'), subject to on-device or explicit cloud opt-in (ST-2).
+   * ST-8.3 Retry Whisper button: clears slow/failed flags, resets RTF monitor, and switches back to Whisper seamlessly (ST-10).
    */
-  const startAsrForSettings = useCallback(
-    async (cfg: VoiceSettings) => {
-      const client = ensureWorker();
-      client.resume();
+  const retryWhisperEngine = useCallback(async () => {
+    whisperFailedModelsRef.current.clear();
+    whisperSlowModelsRef.current.clear();
+    rtfMonitorRef.current.reset();
+    setShowRetryWhisper(false);
+    setModelError('');
+    if (browserEngineRef.current) {
+      await browserEngineRef.current.destroy();
+      browserEngineRef.current = null;
+    }
+    if (isListeningRef.current && !isPausedRef.current) {
+      await startAsrForSettings(settingsRef.current);
+    }
+  }, [startAsrForSettings]);
 
-      const installed = installedModelsRef.current;
-      const preferredModel: WhisperModelId = cfg.whisperModel || 'base.en';
-      const installedModelId: WhisperModelId | null = installed[preferredModel]
-        ? preferredModel
-        : installed['base.en']
-          ? 'base.en'
-          : installed['tiny.en']
-            ? 'tiny.en'
-            : installed['small.en']
-              ? 'small.en'
-              : null;
-
-      // Mode 1: Explicit Whisper or Auto with an installed Whisper model
-      if (
-        (cfg.engine === 'whisper' || cfg.engine === 'auto') &&
-        installedModelId
-      ) {
-        setActiveAsrMode('loading-whisper');
-        setActiveEngineDetail(`Loading Whisper ${installedModelId}…`);
-        try {
-          const entry = getCatalogEntry(installedModelId);
-          await client.downloadOrLoadModel(installedModelId, entry.hfRepo);
-          return;
-        } catch {
-          if (cfg.engine === 'whisper') {
-            setActiveAsrMode('awaiting-model');
-            setActiveEngineDetail('Whisper model could not be loaded.');
-            return;
-          }
-        }
-      }
-
-      // Mode 2: Whisper requested explicitly, but no model downloaded yet
-      if (cfg.engine === 'whisper' && !installedModelId) {
-        setActiveAsrMode('awaiting-model');
-        setActiveEngineDetail(
-          'Offline Whisper model not downloaded yet. Download it in Library → Voice models.'
-        );
-        return;
-      }
-
-      // Mode 3: Browser SpeechRecognition (either explicit 'browser' or first-run bridge in 'auto')
-      if (isBrowserSpeechRecognitionSupported()) {
-        const canLocal = supportsProcessLocally();
-        if (canLocal || cfg.allowCloudBrowserEngine) {
-          if (!browserEngineRef.current) {
-            browserEngineRef.current = new BrowserSpeechEngine();
-          }
-          const isBridge = cfg.engine === 'auto' && !installedModelId;
-          setActiveAsrMode(isBridge ? 'browser-bridge' : 'browser-backup');
-          setActiveEngineDetail(
-            isBridge
-              ? 'Using temporary browser voice engine until an offline Whisper model is downloaded'
-              : canLocal
-                ? 'Browser speech engine (on-device)'
-                : 'Browser speech engine (cloud opt-in)'
-          );
-          await browserEngineRef.current.init(cfg, {
-            onSegment: (seg) => handleIncomingSegment(seg),
-            onStatusChange: (_st, detail) => {
-              if (detail) setActiveEngineDetail(detail);
-            },
-            onError: (msg) => setModelError(msg),
-          });
-          return;
-        }
-      }
-
-      // No engine available without downloading Whisper or opting into cloud browser recognition
-      setActiveAsrMode('awaiting-model');
-      setActiveEngineDetail(
-        'Download an offline Whisper model in Library → Voice models (or enable Cloud Browser Recognition in Settings → Voice).'
-      );
-    },
-    [ensureWorker, handleIncomingSegment]
-  );
-
-  // Stop capture tracks & ASR engines completely
   const stopCaptureHardware = useCallback(async () => {
     if (captureRef.current) {
       await captureRef.current.stop();
@@ -538,6 +744,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     async (cfg: VoiceSettings): Promise<boolean> => {
       await stopCaptureHardware();
       const client = ensureWorker();
+      client.setPerformanceMode(Boolean(cfg.performanceMode));
       client.resume();
 
       const currentDevices = await refreshDevices();
@@ -589,7 +796,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         setPermissionState('granted');
         setPermissionError('');
 
-        // Launch active ASR engine (Whisper primary, Browser backup/bridge)
         startAsrForSettings(cfg);
 
         const afterGrant = await refreshDevices();
@@ -675,14 +881,26 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      if (patch.performanceMode !== undefined) {
+        workerRef.current?.setPerformanceMode(Boolean(next.performanceMode));
+      }
+
+      // If user explicitly changed whisperModel or engine, clear slow/failed flags for that model
+      if (patch.whisperModel !== undefined || patch.engine !== undefined) {
+        whisperFailedModelsRef.current.clear();
+        whisperSlowModelsRef.current.clear();
+        rtfMonitorRef.current.reset();
+      }
+
       setSettings(next);
       settingsRef.current = next;
       await setKey('settings', 'voice', next);
 
-      // Seamless engine or model switch without clearing suggestions or interrupting live output (ST-10)
+      // ST-10: Seamless engine or model switch without clearing suggestions or interrupting live output
       if (
         (patch.engine !== undefined ||
           patch.whisperModel !== undefined ||
+          patch.performanceMode !== undefined ||
           patch.allowCloudBrowserEngine !== undefined) &&
         isListeningRef.current &&
         !isPausedRef.current
@@ -758,7 +976,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pauseListening, resumeListening]);
 
-  // Global Alt+L shortcut to pause/resume listening (never fires when typing in an input)
+  // Global Alt+L shortcut
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isEditableElementFocused(e.target)) return;
@@ -772,7 +990,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [togglePauseListening]);
 
-  // VA-2: 3-second Test Mic (records 3s in memory, runs signal diagnostic + live Whisper transcript if loaded, discards buffer)
+  // VA-2: 3-second Test Mic
   const runMicTest = useCallback(async (): Promise<MicTestReport | null> => {
     if (isTestingRef.current) return null;
     const wasListeningBefore = isListeningRef.current && !isPausedRef.current;
@@ -890,6 +1108,12 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     activeDevice?.label || settings.deviceLabel || ''
   );
 
+  const modelRec = recommendWhisperModel(
+    hardwareProfile,
+    speedCheckResult?.rtf,
+    speedCheckResult?.testedModelId
+  );
+
   const value: VoiceContextValue = {
     settings,
     updateVoiceSettings,
@@ -914,6 +1138,16 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     runMicTest,
     activeAsrMode,
     activeEngineDetail,
+    engineNotice,
+    showRetryWhisper,
+    retryWhisperEngine,
+    hardwareProfile,
+    recommendedModel: modelRec.recommendedModel,
+    recommendationReason: modelRec.reason,
+    speedCheckResult,
+    isRunningSpeedCheck,
+    runFirstRunSpeedCheck,
+    lastRtf,
     modelCatalog: VOICE_MODELS_CATALOG,
     installedModels,
     probedModelSizes,

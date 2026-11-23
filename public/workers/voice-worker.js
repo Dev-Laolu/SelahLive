@@ -6,19 +6,25 @@
  * while `@huggingface/transformers` loads lazily inside the worker ONLY when the user downloads
  * or loads a Whisper model.
  *
- * Responsibilities (Phase 1 — ST-3, ST-4, ST-5, ST-6, PRD §8):
+ * Responsibilities (Phase 1 & Phase 2 — ST-3..ST-10, PRD §8):
  * 1. Explicit Model Download & Loading (`download-model` / `load-model`):
  *    - Loads `onnx-community/whisper-tiny.en`, `onnx-community/whisper-base.en`,
  *      or `onnx-community/whisper-small.en` via Transformers.js v3.
  *    - Uses WebGPU (`device: 'webgpu'`) when available, falling back automatically to quantised WASM (`dtype: 'q8'`).
  *    - Emits real-time file download/loading progress (`model-progress`).
- * 2. Utterance-Based Voice Activity Detection (VAD) + Rolling Context Window (ST-5):
- *    - Segments 16 kHz mono audio into speech utterances (~0.5 s to 6.5 s) with a 256 ms pre-roll,
- *      interim transcription during continuous speech (~1.8 s), and final transcription on pause (~416 ms silence).
+ * 2. ST-9 First-Run Speed Check Benchmark (`run-benchmark`):
+ *    - Synthesizes a 2.0-second 16 kHz speech-band benchmark clip in memory, runs one warm-up pass
+ *      and one timed inference pass on the loaded Whisper model, reports `{ audioDurationMs, inferenceMs, rtf, backend }`,
+ *      and zeroes the buffer immediately.
+ * 3. Utterance-Based Voice Activity Detection (VAD) + Rolling Context Window + Performance Mode (ST-5, ST-8):
+ *    - Segments 16 kHz mono audio into speech utterances (~0.5 s to 6.5 s) with a 256 ms pre-roll.
+ *    - In normal mode, emits interim transcription every ~1.8 s during continuous speech.
+ *    - In Performance mode (`set-performance-mode`), disables mid-utterance interim decodes (decoding only on final utterance pause)
+ *      to cut CPU/GPU usage by ~50% while streaming in OBS.
+ *    - Reports `audioDurationMs`, `inferenceMs`, and `rtf` on every final segment so `RtfMonitor` (ST-8.3)
+ *      can detect sustained slow decoding (`RTF > 1.0`) and step down to `tiny.en` or Browser fallback automatically.
  *    - Immediately zeroes and discards audio buffers after inference (zero audio retention: PRD §8).
- * 3. 3-Second "Test Mic" with Live Whisper Transcription (VA-2):
- *    - Evaluates signal health AND runs Whisper on the 3-second test buffer if a model is loaded,
- *      returning the transcript preview to Settings -> Voice, then immediately zeroes & discards the buffer.
+ * 4. 3-Second "Test Mic" with Live Whisper Transcription (VA-2).
  */
 
 const MODEL_REPOS = {
@@ -32,6 +38,7 @@ const TRANSFORMERS_ESM_URL =
 
 let transformersLib = null;
 let isPaused = false;
+let performanceMode = false;
 let framesProcessed = 0;
 
 // Active Whisper pipeline instance
@@ -48,7 +55,7 @@ const PRE_ROLL_MAX_FRAMES = 8;          // ~256 ms pre-roll before speech onset
 const SPEECH_RMS_ONSET = 0.013;         // Speech onset threshold
 const SPEECH_RMS_HOLD = 0.008;          // Speech continuation threshold
 const SILENCE_FRAMES_TO_FINALIZE = 13;  // ~416 ms of silence ends an utterance
-const INTERIM_INTERVAL_SAMPLES = 28800; // ~1.8 s of speech triggers an interim decode
+const INTERIM_INTERVAL_SAMPLES = 28800; // ~1.8 s of speech triggers an interim decode (disabled in performanceMode)
 const MAX_UTTERANCE_SAMPLES = 104000;   // ~6.5 s max utterance before forced final decode
 const MIN_SPEECH_SAMPLES = 8000;        // ~0.5 s minimum speech to transcribe
 
@@ -238,6 +245,75 @@ async function loadWhisperModel(modelId, explicitRepo) {
   }
 }
 
+/**
+ * ST-9 First-run speed benchmark:
+ * Synthesizes a 2.0-second 16 kHz clip with speech-like formant modulation,
+ * runs an initial warm-up pass (to compile shaders/WASM), then times a 2.0s decode pass.
+ */
+async function runSpeedBenchmark(requestedModelId) {
+  const targetModel = requestedModelId || loadedModelId || "base.en";
+  if (!asrPipeline || loadedModelId !== targetModel) {
+    const ok = await loadWhisperModel(targetModel);
+    if (!ok || !asrPipeline) {
+      self.postMessage({
+        type: "benchmark-error",
+        modelId: targetModel,
+        error: `Could not load ${targetModel} for speed check.`,
+      });
+      return;
+    }
+  }
+
+  const audioDurationMs = 2000;
+  const numSamples = SAMPLE_RATE * 2; // 2.0 seconds @ 16 kHz
+  const clip = new Float32Array(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / SAMPLE_RATE;
+    const env = Math.sin(Math.PI * (i / numSamples));
+    clip[i] =
+      0.12 *
+      env *
+      (Math.sin(2 * Math.PI * 180 * t) +
+        0.5 * Math.sin(2 * Math.PI * 520 * t) +
+        0.25 * Math.sin(2 * Math.PI * 1150 * t));
+  }
+
+  try {
+    // Short 0.5s warm-up pass so JIT / shader compilation is excluded from steady-state RTF
+    await asrPipeline(clip.subarray(0, 8000), {
+      language: "english",
+      task: "transcribe",
+      return_timestamps: false,
+    });
+
+    const t0 = performance.now();
+    await asrPipeline(clip, {
+      language: "english",
+      task: "transcribe",
+      return_timestamps: false,
+    });
+    const inferenceMs = Math.max(10, Math.round(performance.now() - t0));
+    const rtf = Number((inferenceMs / audioDurationMs).toFixed(2));
+    clip.fill(0);
+
+    self.postMessage({
+      type: "benchmark-complete",
+      modelId: loadedModelId,
+      backend: activeBackend,
+      audioDurationMs,
+      inferenceMs,
+      rtf,
+    });
+  } catch (err) {
+    clip.fill(0);
+    self.postMessage({
+      type: "benchmark-error",
+      modelId: targetModel,
+      error: (err && err.message) || "Benchmark failed.",
+    });
+  }
+}
+
 function cleanWhisperOutput(raw) {
   const s = String(raw || "")
     .replace(/\[.*?\]/g, " ")
@@ -255,6 +331,10 @@ async function processDecodeQueue() {
 
   const job = pendingDecode;
   pendingDecode = null;
+  const audioDurationMs = Math.max(
+    250,
+    Math.round((job.audio.length / SAMPLE_RATE) * 1000)
+  );
 
   try {
     const t0 = performance.now();
@@ -263,12 +343,25 @@ async function processDecodeQueue() {
       task: "transcribe",
       return_timestamps: false,
     });
-    const inferenceMs = Math.round(performance.now() - t0);
+    const inferenceMs = Math.max(1, Math.round(performance.now() - t0));
+    const rtf = Number((inferenceMs / audioDurationMs).toFixed(2));
     const rawText = out && typeof out.text === "string" ? out.text : "";
     const cleaned = cleanWhisperOutput(rawText);
 
     // Zero out the audio buffer immediately after inference (PRD §8)
     job.audio.fill(0);
+
+    // Report RTF metric on every final decode so ST-8.3 can detect sustained RTF > 1.0
+    if (job.isFinal) {
+      self.postMessage({
+        type: "rtf-metric",
+        modelId: loadedModelId,
+        backend: activeBackend,
+        audioDurationMs,
+        inferenceMs,
+        rtf,
+      });
+    }
 
     if (cleaned) {
       self.postMessage({
@@ -281,6 +374,8 @@ async function processDecodeQueue() {
           endMs: job.endMs,
           confidence: job.isFinal ? 0.92 : 0.8,
           inferenceMs,
+          audioDurationMs,
+          rtf,
         },
       });
     }
@@ -361,7 +456,9 @@ function handleVadFrame(samples) {
     return;
   }
 
+  // In Performance mode, skip mid-utterance interim decodes to save CPU/GPU cycles
   if (
+    !performanceMode &&
     !isTranscribing &&
     utteranceSampleCount - lastInterimSampleCount >= INTERIM_INTERVAL_SAMPLES
   ) {
@@ -430,6 +527,16 @@ self.onmessage = async (event) => {
         sampleRate: SAMPLE_RATE,
         loadedModelId,
       });
+      break;
+    }
+
+    case "set-performance-mode": {
+      performanceMode = Boolean(msg.enabled);
+      break;
+    }
+
+    case "run-benchmark": {
+      await runSpeedBenchmark(msg.modelId);
       break;
     }
 

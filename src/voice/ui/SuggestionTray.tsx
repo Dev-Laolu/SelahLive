@@ -143,6 +143,9 @@ export function SuggestionTray({
     isPaused,
     activeAsrMode,
     activeEngineDetail,
+    engineNotice,
+    showRetryWhisper,
+    retryWhisperEngine,
     suggestions,
     markSuggestionActed,
     togglePinSuggestion,
@@ -303,6 +306,16 @@ export function SuggestionTray({
         </div>
 
         <div className="row wrap" style={{ gap: 8, fontSize: 11 }}>
+          {showRetryWhisper && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ minHeight: 26, padding: '2px 10px', fontSize: 11 }}
+              onClick={() => retryWhisperEngine()}
+            >
+              <Icon name="refresh" size={12} /> Retry Whisper
+            </button>
+          )}
           {activeAsrMode === 'awaiting-model' && (
             <Link href="/app/library?tab=voice" className="btn btn-secondary btn-sm" style={{ minHeight: 26, padding: '2px 10px', fontSize: 11 }}>
               <Icon name="download" size={12} /> Download Whisper model
@@ -314,6 +327,23 @@ export function SuggestionTray({
           </span>
         </div>
       </div>
+
+      {(activeAsrMode === 'browser-bridge' || activeAsrMode === 'browser-fallback' || showRetryWhisper) && engineNotice && (
+        <div className="banner warn" style={{ fontSize: 12, padding: '6px 10px' }}>
+          <Icon name="alert" size={15} />
+          <span className="grow">{engineNotice}</span>
+          {showRetryWhisper && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ minHeight: 26, padding: '2px 10px', fontSize: 11 }}
+              onClick={() => retryWhisperEngine()}
+            >
+              <Icon name="refresh" size={12} /> Retry Whisper
+            </button>
+          )}
+        </div>
+      )}
 
       {visibleSuggestions.length === 0 ? (
         <div className="muted" style={{ fontSize: 12 }}>

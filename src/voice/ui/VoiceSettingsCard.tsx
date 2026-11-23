@@ -37,6 +37,15 @@ export function VoiceSettingsCard() {
     runMicTest,
     activeAsrMode,
     activeEngineDetail,
+    engineNotice,
+    showRetryWhisper,
+    retryWhisperEngine,
+    recommendedModel,
+    recommendationReason,
+    speedCheckResult,
+    isRunningSpeedCheck,
+    runFirstRunSpeedCheck,
+    lastRtf,
     installedModels,
   } = useVoice();
 
@@ -359,11 +368,59 @@ export function VoiceSettingsCard() {
         }}
       >
         <div className="row between wrap" style={{ gap: 8 }}>
-          <span className="label">Speech Recognition &amp; Scripture Matching</span>
-          <Link href="/app/library?tab=voice" className="btn btn-secondary btn-sm" style={{ minHeight: 28, padding: '2px 10px', fontSize: 12 }}>
-            <Icon name="download" size={13} /> Manage Voice Models in Library
-          </Link>
+          <div className="col" style={{ gap: 2 }}>
+            <span className="label">Speech Recognition &amp; Engine Management</span>
+            <span className="muted" style={{ fontSize: 11 }}>
+              Recommended for this computer: <b className="gold">{recommendedModel}</b> — {recommendationReason}
+              {lastRtf != null && ` · Latest speed: ${lastRtf.toFixed(2)}× real-time`}
+            </span>
+          </div>
+          <div className="row wrap" style={{ gap: 8 }}>
+            {Object.keys(installedModels).length > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ minHeight: 28, padding: '2px 10px', fontSize: 12 }}
+                disabled={isRunningSpeedCheck}
+                onClick={() => runFirstRunSpeedCheck()}
+              >
+                <Icon name="bolt" size={13} />
+                {isRunningSpeedCheck ? 'Benchmarking…' : 'Speed check'}
+              </button>
+            )}
+            <Link href="/app/library?tab=voice" className="btn btn-secondary btn-sm" style={{ minHeight: 28, padding: '2px 10px', fontSize: 12 }}>
+              <Icon name="download" size={13} /> Manage Voice Models in Library
+            </Link>
+          </div>
         </div>
+
+        {/* ST-8.3 Fallback notice + Retry Whisper button */}
+        {(showRetryWhisper || activeAsrMode === 'browser-fallback' || activeAsrMode === 'browser-bridge') && engineNotice && (
+          <div className="banner warn" style={{ fontSize: 12 }}>
+            <Icon name="alert" size={16} />
+            <span className="grow">{engineNotice}</span>
+            {showRetryWhisper && (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => retryWhisperEngine()}
+              >
+                <Icon name="refresh" size={13} /> Retry Whisper
+              </button>
+            )}
+          </div>
+        )}
+
+        {speedCheckResult && (
+          <div className="banner ok" style={{ fontSize: 12 }}>
+            <Icon name="bolt" size={16} />
+            <span className="grow">
+              <b>Speed check ({speedCheckResult.testedModelId} · {speedCheckResult.backend.toUpperCase()}):</b>{' '}
+              {speedCheckResult.inferenceMs} ms for 2.0 s audio ({speedCheckResult.rtf.toFixed(2)}× real-time).{' '}
+              {speedCheckResult.summary}
+            </span>
+          </div>
+        )}
 
         {!selectedModelInstalled && (
           <div className="banner warn" style={{ fontSize: 12 }}>
@@ -478,6 +535,17 @@ export function VoiceSettingsCard() {
         </div>
 
         <div className="row wrap" style={{ gap: 18 }}>
+          <label className="check" style={{ fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={settings.performanceMode}
+              onChange={(e) => updateVoiceSettings({ performanceMode: e.target.checked })}
+            />
+            <span>
+              <b>Performance mode</b> (uses lighter model &amp; final-only decoding to keep CPU low while streaming)
+            </span>
+          </label>
+
           <label className="check" style={{ fontSize: 13 }}>
             <input
               type="checkbox"

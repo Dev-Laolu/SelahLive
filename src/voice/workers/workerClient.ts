@@ -12,6 +12,22 @@ export interface WorkerMicTestResult {
   modelLoaded?: WhisperModelId | null;
 }
 
+export interface WorkerBenchmarkResult {
+  modelId: WhisperModelId;
+  backend: 'webgpu' | 'wasm';
+  audioDurationMs: number;
+  inferenceMs: number;
+  rtf: number;
+}
+
+export interface WorkerRtfMetric {
+  modelId: WhisperModelId;
+  backend: 'webgpu' | 'wasm';
+  audioDurationMs: number;
+  inferenceMs: number;
+  rtf: number;
+}
+
 export interface ModelProgressEvent {
   modelId: WhisperModelId;
   progress: number; // 0..1
@@ -25,6 +41,7 @@ export interface WorkerClientCallbacks {
   onModelProgress?: (ev: ModelProgressEvent) => void;
   onModelReady?: (info: { modelId: WhisperModelId; hfRepo: string; backend: 'webgpu' | 'wasm' }) => void;
   onModelError?: (info: { modelId: WhisperModelId; error: string }) => void;
+  onRtfMetric?: (metric: WorkerRtfMetric) => void;
 }
 
 export class VoiceWorkerClient {
@@ -32,6 +49,10 @@ export class VoiceWorkerClient {
   private ready = false;
   private callbacks: WorkerClientCallbacks = {};
   private micTestResolver: ((res: WorkerMicTestResult) => void) | null = null;
+  private benchmarkResolver: {
+    resolve: (res: WorkerBenchmarkResult) => void;
+    reject: (err: Error) => void;
+  } | null = null;
   private modelLoadResolvers = new Map<
     WhisperModelId,
     { resolve: (info: { backend: 'webgpu' | 'wasm' }) => void; reject: (err: Error) => void }
@@ -51,6 +72,28 @@ export class VoiceWorkerClient {
           this.ready = true;
         } else if (d.type === 'transcript-segment' && d.segment) {
           this.callbacks.onTranscriptSegment?.(d.segment as TranscriptSegment);
+        } else if (d.type === 'rtf-metric') {
+          this.callbacks.onRtfMetric?.({
+            modelId: d.modelId,
+            backend: d.backend || 'wasm',
+            audioDurationMs: d.audioDurationMs || 1000,
+            inferenceMs: d.inferenceMs || 0,
+            rtf: d.rtf || 0,
+          });
+        } else if (d.type === 'benchmark-complete' && this.benchmarkResolver) {
+          const { resolve } = this.benchmarkResolver;
+          this.benchmarkResolver = null;
+          resolve({
+            modelId: d.modelId,
+            backend: d.backend || 'wasm',
+            audioDurationMs: d.audioDurationMs || 2000,
+            inferenceMs: d.inferenceMs || 0,
+            rtf: d.rtf || 0,
+          });
+        } else if (d.type === 'benchmark-error' && this.benchmarkResolver) {
+          const { reject } = this.benchmarkResolver;
+          this.benchmarkResolver = null;
+          reject(new Error(d.error || 'Benchmark failed'));
         } else if (d.type === 'model-progress') {
           this.callbacks.onModelProgress?.({
             modelId: d.modelId,
@@ -102,6 +145,18 @@ export class VoiceWorkerClient {
     }
   }
 
+  setPerformanceMode(enabled: boolean): void {
+    this.worker?.postMessage({ type: 'set-performance-mode', enabled });
+  }
+
+  runSpeedBenchmark(modelId?: WhisperModelId): Promise<WorkerBenchmarkResult> {
+    if (!this.worker) this.start();
+    return new Promise((resolve, reject) => {
+      this.benchmarkResolver = { resolve, reject };
+      this.worker?.postMessage({ type: 'run-benchmark', modelId });
+    });
+  }
+
   downloadOrLoadModel(modelId: WhisperModelId, hfRepo?: string): Promise<{ backend: 'webgpu' | 'wasm' }> {
     if (!this.worker) this.start();
     return new Promise((resolve, reject) => {
@@ -149,6 +204,7 @@ export class VoiceWorkerClient {
     this.worker = null;
     this.ready = false;
     this.micTestResolver = null;
+    this.benchmarkResolver = null;
     this.modelLoadResolvers.clear();
   }
 

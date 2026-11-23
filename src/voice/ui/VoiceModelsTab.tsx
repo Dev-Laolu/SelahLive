@@ -17,6 +17,12 @@ export function VoiceModelsTab() {
   const {
     settings,
     updateVoiceSettings,
+    hardwareProfile,
+    recommendedModel,
+    recommendationReason,
+    speedCheckResult,
+    isRunningSpeedCheck,
+    runFirstRunSpeedCheck,
     modelCatalog,
     installedModels,
     probedModelSizes,
@@ -55,6 +61,33 @@ export function VoiceModelsTab() {
           Download a voice model once while online. After downloading, Selah Live transcribes the pastor&apos;s microphone{' '}
           <b>entirely offline on this computer</b> (using WebGPU or WASM inside a background Web Worker) and suggests Scriptures without ever sending audio to the internet.
         </p>
+        <div className="row between wrap" style={{ gap: 8, marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)', fontSize: 12 }}>
+          <div>
+            <b>Recommended for this computer:</b>{' '}
+            <span className="gold">{recommendedModel}</span>{' '}
+            <span className="muted">
+              ({hardwareProfile.deviceMemoryGb} GB RAM · {hardwareProfile.hardwareConcurrency} threads ·{' '}
+              {hardwareProfile.hasWebGpu ? 'WebGPU ready' : 'WASM CPU'})
+            </span>
+            <div className="muted" style={{ fontSize: 11 }}>{recommendationReason}</div>
+          </div>
+          {Object.keys(installedModels).length > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={isRunningSpeedCheck}
+              onClick={async () => {
+                const res = await runFirstRunSpeedCheck();
+                if (res) {
+                  toast(`Speed check: ${res.rtf.toFixed(2)}× real-time (${res.inferenceMs} ms for 2 s clip). Recommended: ${res.recommendedModel}`);
+                }
+              }}
+            >
+              <Icon name="bolt" size={14} />
+              {isRunningSpeedCheck ? 'Running speed check…' : 'Run speed check (ST-9)'}
+            </button>
+          )}
+        </div>
       </div>
 
       {modelError && (
