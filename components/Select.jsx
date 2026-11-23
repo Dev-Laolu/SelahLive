@@ -26,11 +26,11 @@ export default function Select({
   placeholder = "Select…",
   searchable = false,
   searchPlaceholder = "Type to filter…",
-  ariaLabel,
-  id,
+  ariaLabel = undefined,
+  id = undefined,
   disabled = false,
   className = "",
-  style,
+  style = undefined,
 }) {
   const autoId = useId();
   const listId = `${autoId}-list`;

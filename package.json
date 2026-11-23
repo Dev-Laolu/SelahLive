@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:voice": "node scripts/test-voice-phase0.mjs",
     "admin:hash-password": "node scripts/admin-hash-password.mjs",
     "admin:setup-mfa": "node scripts/admin-setup-mfa.mjs"
   },
@@ -20,5 +21,11 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3"
   }
 }

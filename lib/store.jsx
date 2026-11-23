@@ -6,6 +6,7 @@ import { DEFAULT_STYLE } from "@/lib/defaults";
 import { DEFAULT_THEMES, sanitizeTheme, migrateThemeToV2, isTemplateNameTaken } from "@/lib/themes";
 import { unifiedSearch } from "@/lib/search";
 import { runAccountSync } from "@/lib/sync";
+import { VoiceProvider } from "@/src/voice/VoiceContext";
 import { gunzipSync, unzipSync } from "fflate";
 
 const Ctx = createContext(null);
@@ -1028,5 +1029,9 @@ export function AppProvider({ children }) {
     syncStatus, lastSyncedAt, syncNotice, syncNow,
     setupDone, finishSetup, theme, changeTheme,
   };
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      <VoiceProvider>{children}</VoiceProvider>
+    </Ctx.Provider>
+  );
 }

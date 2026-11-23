@@ -9,6 +9,7 @@ import { PreviewFrame } from "./Overlay";
 import { useApp } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { SAMPLE_VERSE } from "@/lib/defaults";
+import { ListeningIndicator } from "@/src/voice/ui/ListeningIndicator";
 
 const NAV = [
   { href: "/app/overview", label: "Overview", icon: "home" },
@@ -307,6 +308,7 @@ export default function AppShell({ children, pending, preview = true }) {
         <Link href="/app/scripture"><Logo /></Link>
         <div className="row" style={{ gap: 10 }}>
           {!online && <span className="chip warn"><Icon name="wifioff" size={14} />Offline</span>}
+          <ListeningIndicator />
           {obsChip}
           {live && <span className="chip live"><span className="dot bad pulse" />Live: {live.clearMode === "blackout" ? "Blackout" : live.clearMode === "logoScreen" ? "Logo" : live.title || "On screen"}</span>}
           <button className="btn btn-ghost btn-sm" aria-label="OBS Connection Help" title="How to connect to OBS" onClick={() => setHelp(true)} style={{ gap: 5 }}>

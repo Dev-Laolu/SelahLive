@@ -9,6 +9,7 @@ import { useApp } from "@/lib/store";
 import { useAuth, friendly } from "@/lib/auth";
 import { OBS_ERRORS } from "@/lib/obs";
 import { useToast } from "@/components/Toast";
+import { VoiceSettingsCard } from "@/src/voice/ui/VoiceSettingsCard";
 
 export default function SettingsPage() {
   const { obs, obsStatus, obsError, obsConf, saveObsConf, connectObs, theme, changeTheme, syncStatus, lastSyncedAt, syncNotice, syncNow } = useApp();
@@ -92,6 +93,7 @@ export default function SettingsPage() {
         <p className="muted" style={{ margin: 0 }}>Add this as a custom browser dock in OBS (View → Docks → Custom Browser Docks) to control Selah Live from inside OBS.</p>
         <div className="row"><input className="input mono" readOnly value={dock} aria-label="Dock link" /><button className="btn btn-secondary" onClick={() => { navigator.clipboard?.writeText(dock); toast("Dock link copied."); }}><Icon name="copy" size={16} />Copy dock link</button></div>
         <span className="muted" style={{ fontSize: 12 }}>Pairing code: <b className="mono gold">{obsConf.pairId}</b></span></div>
+      <VoiceSettingsCard />
       <div className="card col"><h3>Startup help</h3>
         <p style={{ margin: 0 }}>Selah Live must be running (minimized is fine) for verses to show. It can't run after it's closed.</p>
         <ul className="muted" style={{ margin: 0, paddingLeft: 20 }}><li><b>Chrome:</b> open chrome://apps, right-click Selah Live, choose “Start app when you sign in”.</li><li><b>Edge:</b> open edge://apps, choose “Start app on device login”. Turn off “sleeping tabs” for this app.</li></ul></div>

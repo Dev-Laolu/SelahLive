@@ -48,9 +48,11 @@ const P = {
   redo: ["M21 7v6h-6", "M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"],
   sparkle: ["M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"],
   help: [[12, 12, 10], "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3", "M12 17h.01"],
+  mic: [{ x: 9, y: 2, w: 6, h: 11, rx: 3 }, "M19 10v2a7 7 0 0 1-14 0v-2", "M12 19v3", "M8 22h8"],
+  micoff: ["M2 2l20 20", "M18.89 13.23A7.12 7.12 0 0 0 19 12v-2", "M5 10v2a7 7 0 0 0 12 5", "M15 9.34V5a3 3 0 0 0-5.68-1.33", "M9 9v3a3 3 0 0 0 5.12 2.12", "M12 19v3", "M8 22h8"],
 };
 
-export default function Icon({ name, size, className = "", style, ...rest }) {
+export default function Icon({ name, size = 18, className = "", style = undefined, ...rest }) {
   const items = P[name] || [];
   return (
     <svg className={`icon ${className}`} style={size ? { width: size, height: size, ...style } : style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...rest}>
