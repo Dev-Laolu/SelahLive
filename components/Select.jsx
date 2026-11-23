@@ -20,15 +20,30 @@ import Icon from "./Icon";
  *  - style?: object
  */
 
+/**
+ * @param {{
+ *   value: any,
+ *   onChange: (val: any) => void,
+ *   options?: Array<any>,
+ *   placeholder?: string,
+ *   searchable?: boolean,
+ *   searchPlaceholder?: string,
+ *   ariaLabel?: string,
+ *   id?: string,
+ *   disabled?: boolean,
+ *   className?: string,
+ *   style?: any
+ * }} props
+ */
 export default function Select({
   value,
   onChange,
-  options = [],
+  options = /** @type {any[]} */ ([]),
   placeholder = "Select…",
   searchable = false,
   searchPlaceholder = "Type to filter…",
-  ariaLabel = undefined,
-  id = undefined,
+  ariaLabel = "",
+  id = "",
   disabled = false,
   className = "",
   style = undefined,

@@ -119,7 +119,7 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   whisperModel: 'base.en',
   sensitivity: 'balanced',
   defaultVersionId: '',
-  showTranscript: false,
+  showTranscript: true,
   chime: false,
   performanceMode: false,
   allowCloudBrowserEngine: false,

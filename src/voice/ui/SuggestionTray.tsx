@@ -15,6 +15,7 @@ import type {
 } from '../types';
 import {
   dispatchOperatorSuggestionAction,
+  sanitizeTranscriptText,
   type OperatorGestureEvent,
 } from '../suggestions/safety';
 
@@ -200,17 +201,25 @@ export function SuggestionTray({
     settings,
     isListening,
     isPaused,
+    level,
     activeAsrMode,
     activeEngineDetail,
     engineNotice,
     showRetryWhisper,
     retryWhisperEngine,
+    transcript,
+    clearTranscript,
     suggestions,
     markSuggestionActed,
     togglePinSuggestion,
   } = useVoice();
 
   const reduceMotion = Boolean(style?.reduceMotion);
+  const latestSegments = transcript.slice(-3);
+  const latestText =
+    latestSegments.length > 0
+      ? sanitizeTranscriptText(latestSegments[latestSegments.length - 1].text, 240)
+      : '';
 
   const visibleSuggestions = (
     filterKind ? suggestions.filter((s) => s.kind === filterKind) : suggestions
@@ -402,6 +411,70 @@ export function SuggestionTray({
             )}
           </div>
         )}
+
+      {/* Always-visible Live Hearing Transcript Strip so the operator sees what the voice model is hearing in real time */}
+      {settings.enabled && (
+        <div
+          className="row between wrap"
+          style={{
+            gap: 8,
+            padding: '8px 10px',
+            borderRadius: 'var(--r-ctl)',
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            fontSize: 12,
+          }}
+          aria-live="polite"
+        >
+          <div className="row" style={{ gap: 8, minWidth: 0, flex: 1 }}>
+            <span
+              className={`dot ${
+                isListening && !isPaused
+                  ? level.db > -42
+                    ? 'ok pulse'
+                    : 'gold'
+                  : 'warn'
+              }`}
+            />
+            <Icon name={isListening && !isPaused ? 'mic' : 'micoff'} size={14} className="gold" />
+            <b style={{ flexShrink: 0 }}>Hearing:</b>
+            <span
+              style={{
+                color: latestText ? 'var(--text)' : 'var(--text-2)',
+                fontStyle: latestText ? 'normal' : 'italic',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {latestText
+                ? `“${latestText}”`
+                : isListening && !isPaused
+                  ? level.db > -45
+                    ? 'Capturing speech… transcribing utterance…'
+                    : 'Listening for speech… speak into the microphone'
+                  : 'Voice listening is paused (press Alt+L to resume)'}
+            </span>
+          </div>
+          <div className="row" style={{ gap: 8, flexShrink: 0 }}>
+            {isListening && !isPaused && (
+              <span className="muted mono" style={{ fontSize: 11 }}>
+                {level.db <= -55 ? 'Silent' : `${level.db.toFixed(0)} dB`}
+              </span>
+            )}
+            {transcript.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ minHeight: 22, padding: '1px 6px', fontSize: 11 }}
+                onClick={clearTranscript}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {visibleSuggestions.length === 0 ? (
         <div className="muted" style={{ fontSize: 12 }}>

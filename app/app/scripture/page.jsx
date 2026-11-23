@@ -304,7 +304,7 @@ export default function ScripturePage() {
           setSel({ ...sugItem, id: `${pack?.id}:${sugItem.title}`, text: sugItem.body });
         }}
       />
-      {voiceSettings.showTranscript && <TranscriptPanel defaultOpen={false} />}
+      {voiceSettings.showTranscript !== false && <TranscriptPanel defaultOpen={true} />}
 
       {/* Smart Search Bar + Searchable Bible Version Combobox */}
       <div className="row wrap">

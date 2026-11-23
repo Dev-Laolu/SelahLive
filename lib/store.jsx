@@ -9,7 +9,8 @@ import { runAccountSync } from "@/lib/sync";
 import { VoiceProvider } from "@/src/voice/VoiceContext";
 import { gunzipSync, unzipSync } from "fflate";
 
-const Ctx = createContext(null);
+const Ctx = createContext(/** @type {any} */ (null));
+/** @returns {any} */
 export const useApp = () => useContext(Ctx);
 const APP_VERSION = "2.0.0";
 

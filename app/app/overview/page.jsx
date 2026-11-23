@@ -259,7 +259,7 @@ export default function OverviewPage() {
             setPending(sugItem);
           }}
         />
-        {voiceSettings.showTranscript && <TranscriptPanel defaultOpen={true} />}
+        {voiceSettings.showTranscript !== false && <TranscriptPanel defaultOpen={true} />}
 
         {/* MD-7: Service Context (optional preload list for today's expected verses, songs & texts) */}
         {voiceSettings.enabled && (

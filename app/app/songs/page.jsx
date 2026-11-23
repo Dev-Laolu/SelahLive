@@ -9,6 +9,8 @@ import { parseSong } from "@/lib/songs";
 import { highlightSegments } from "@/lib/search";
 import { useToast } from "@/components/Toast";
 import { SuggestionTray } from "@/src/voice/ui/SuggestionTray";
+import { TranscriptPanel } from "@/src/voice/ui/TranscriptPanel";
+import { useVoice } from "@/src/voice/VoiceContext";
 
 function rechunkSections(sections = [], maxLines = 2) {
   const out = [];
@@ -118,6 +120,7 @@ export default function SongsPage() {
     lyricsLinesPerSlide, setLyricsLinesPerSlide,
     show, updateLive, takeLive, live,
   } = useApp();
+  const { settings: voiceSettings } = useVoice();
   const toast = useToast();
   const [q, setQ] = useState("");
   const [packFilter, setPackFilter] = useState("all");
@@ -282,6 +285,7 @@ export default function SongsPage() {
           }
         }}
       />
+      {voiceSettings.showTranscript !== false && <TranscriptPanel defaultOpen={false} />}
 
       {songs.length === 0 ? (
         <div className="empty">

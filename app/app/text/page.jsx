@@ -6,6 +6,8 @@ import Select from "@/components/Select";
 import { useApp } from "@/lib/store";
 import { useToast } from "@/components/Toast";
 import { SuggestionTray } from "@/src/voice/ui/SuggestionTray";
+import { TranscriptPanel } from "@/src/voice/ui/TranscriptPanel";
+import { useVoice } from "@/src/voice/VoiceContext";
 
 export default function TextPage() {
   const {
@@ -14,6 +16,7 @@ export default function TextPage() {
     savedTexts, saveTextItem, deleteTextItem, toggleFavText, bumpTextUse,
     themes,
   } = useApp();
+  const { settings: voiceSettings } = useVoice();
   const toast = useToast();
 
   const [activeId, setActiveId] = useState(null);
@@ -239,6 +242,7 @@ export default function TextPage() {
           if (found) openSaved(found);
         }}
       />
+      {voiceSettings.showTranscript !== false && <TranscriptPanel defaultOpen={false} />}
 
       <div className="two" style={{ gridTemplateColumns: "290px 1fr", alignItems: "start" }}>
         {/* Left: Saved Texts library with Favourites pinned on top */}
