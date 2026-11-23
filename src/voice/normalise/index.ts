@@ -384,6 +384,10 @@ export function normaliseSpokenText(rawText: string): string {
     .replace(/\bcanticles\b/g, 'songofsolomon')
     .replace(/\brevelations\b/g, 'revelation')
     .replace(/\bpsalms\b/g, 'psalm')
+    // Accented / colloquial ASR homophones for "chapter" and "verse"
+    .replace(/\b(?:shapter|capta|chapt)\b/g, 'chapter')
+    .replace(/\b(?:vass|vase|vars)\b/g, 'verse')
+    .replace(/\b(\d+)\s+(?:first|fast|bus|pass)\s+(\d+)\b/g, '$1 verse $2')
     .replace(/\b1st\b/g, 'first')
     .replace(/\b2nd\b/g, 'second')
     .replace(/\b3rd\b/g, 'third')

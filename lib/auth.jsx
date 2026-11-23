@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { firebaseEnabled, getFirebaseAuth, getFirebaseDb, initFirebaseAnalytics } from "@/lib/firebase";
+import { firebaseEnabled, getFirebaseAuth, getFirebaseDb, initFirebaseAnalytics, shouldSuppressAnalytics } from "@/lib/firebase";
 import { getKey, setKey } from "@/lib/db";
 
 const AuthCtx = createContext(null);
@@ -58,7 +58,8 @@ async function syncUserFirestore(u, fallbackName = "") {
       });
     }
     // Also ping server analytics so real user activity is recorded in both Firestore & Neon
-    if (typeof fetch !== "undefined" && navigator.onLine) {
+    // Skip analytics when connected locally to OBS or running on localhost
+    if (typeof fetch !== "undefined" && navigator.onLine && !shouldSuppressAnalytics()) {
       fetch("/api/analytics", {
         method: "POST",
         headers: { "content-type": "application/json" },

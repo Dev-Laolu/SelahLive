@@ -312,6 +312,10 @@ export default function ScripturePage() {
           <Icon name="search" />
           <input
             ref={inputRef}
+            id="scripture-search"
+            name="scriptureSearch"
+            type="search"
+            autoComplete="off"
             className="input"
             maxLength={200}
             value={q}
@@ -336,8 +340,8 @@ export default function ScripturePage() {
       {/* All Versions Toggle (Scripture-only screen) */}
       {bibles.length > 1 && (
         <div className="row" style={{ gap: 10 }}>
-          <label className="check" style={{ fontSize: 12, alignItems: "center" }}>
-            <input type="checkbox" checked={allVersions} onChange={(e) => setAllVersions(e.target.checked)} />
+          <label htmlFor="scripture-all-versions" className="check" style={{ fontSize: 12, alignItems: "center" }}>
+            <input id="scripture-all-versions" name="allVersions" type="checkbox" checked={allVersions} onChange={(e) => setAllVersions(e.target.checked)} />
             <span className="muted">Search across all downloaded Bible versions</span>
           </label>
         </div>

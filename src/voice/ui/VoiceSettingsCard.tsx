@@ -288,14 +288,14 @@ export function VoiceSettingsCard() {
       {/* Raw Audio / Noise Suppression Control (VA-3) */}
       <div className="row between wrap" style={{ gap: 10 }}>
         <div className="col" style={{ gap: 2 }}>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>
+          <span id="voice-ns-lbl" style={{ fontSize: 13, fontWeight: 600 }}>
             Noise suppression ({effectiveNoiseSuppression ? 'Active' : 'Off — raw feed'})
-          </label>
+          </span>
           <span className="muted" style={{ fontSize: 12 }}>
             Auto turns noise suppression <b>off</b> for USB interfaces/mixers and <b>on</b> for built-in laptop mics. Echo cancellation and auto-gain are always off.
           </span>
         </div>
-        <div className="seg" style={{ width: 240 }} role="group" aria-label="Noise suppression mode">
+        <div className="seg" style={{ width: 240 }} role="group" aria-labelledby="voice-ns-lbl">
           <button
             type="button"
             aria-pressed={(settings.noiseSuppression || 'auto') === 'auto'}
@@ -525,8 +525,8 @@ export function VoiceSettingsCard() {
 
         <div className="grid2">
           <div className="field">
-            <label>Speech engine (Whisper is primary)</label>
-            <div className="seg" role="group" aria-label="Speech engine">
+            <span id="voice-engine-lbl" className="label">Speech engine (Whisper is primary)</span>
+            <div className="seg" role="group" aria-labelledby="voice-engine-lbl">
               <button
                 type="button"
                 aria-pressed={settings.engine === 'auto'}
@@ -552,8 +552,8 @@ export function VoiceSettingsCard() {
           </div>
 
           <div className="field">
-            <label>Offline Whisper model</label>
-            <div className="seg" role="group" aria-label="Whisper model">
+            <span id="voice-model-lbl" className="label">Offline Whisper model</span>
+            <div className="seg" role="group" aria-labelledby="voice-model-lbl">
               <button
                 type="button"
                 aria-pressed={settings.whisperModel === 'tiny.en'}
@@ -581,8 +581,8 @@ export function VoiceSettingsCard() {
 
         <div className="grid2">
           <div className="field">
-            <label>Suggestion sensitivity</label>
-            <div className="seg" role="group" aria-label="Suggestion sensitivity">
+            <span id="voice-sens-lbl" className="label">Suggestion sensitivity</span>
+            <div className="seg" role="group" aria-labelledby="voice-sens-lbl">
               <button
                 type="button"
                 aria-pressed={settings.sensitivity === 'careful'}
@@ -608,8 +608,9 @@ export function VoiceSettingsCard() {
           </div>
 
           <div className="field">
-            <label>Default Bible version for voice suggestions</label>
+            <label htmlFor="voice-default-bible">Default Bible version for voice suggestions</label>
             <Select
+              id="voice-default-bible"
               ariaLabel="Default Bible version for suggestions"
               value={settings.defaultVersionId || bibleOptions[0]?.value || ''}
               onChange={(defaultVersionId: string) =>
@@ -621,8 +622,10 @@ export function VoiceSettingsCard() {
         </div>
 
         <div className="row wrap" style={{ gap: 18 }}>
-          <label className="check" style={{ fontSize: 13 }}>
+          <label htmlFor="voice-perf-mode" className="check" style={{ fontSize: 13 }}>
             <input
+              id="voice-perf-mode"
+              name="voicePerformanceMode"
               type="checkbox"
               checked={settings.performanceMode}
               onChange={(e) => updateVoiceSettings({ performanceMode: e.target.checked })}
@@ -632,8 +635,10 @@ export function VoiceSettingsCard() {
             </span>
           </label>
 
-          <label className="check" style={{ fontSize: 13 }}>
+          <label htmlFor="voice-show-transcript" className="check" style={{ fontSize: 13 }}>
             <input
+              id="voice-show-transcript"
+              name="voiceShowTranscript"
               type="checkbox"
               checked={settings.showTranscript}
               onChange={(e) => updateVoiceSettings({ showTranscript: e.target.checked })}
@@ -641,8 +646,10 @@ export function VoiceSettingsCard() {
             <span>Show collapsible live transcript panel on Overview &amp; Scripture</span>
           </label>
 
-          <label className="check" style={{ fontSize: 13 }}>
+          <label htmlFor="voice-chime" className="check" style={{ fontSize: 13 }}>
             <input
+              id="voice-chime"
+              name="voiceChime"
               type="checkbox"
               checked={settings.chime}
               onChange={(e) => updateVoiceSettings({ chime: e.target.checked })}
@@ -656,8 +663,10 @@ export function VoiceSettingsCard() {
           className="card raised col"
           style={{ gap: 6, padding: 12, border: '1px solid var(--border)' }}
         >
-          <label className="check" style={{ fontSize: 13 }}>
+          <label htmlFor="voice-allow-cloud" className="check" style={{ fontSize: 13 }}>
             <input
+              id="voice-allow-cloud"
+              name="voiceAllowCloudBrowserEngine"
               type="checkbox"
               checked={settings.allowCloudBrowserEngine}
               onChange={(e) =>
@@ -720,8 +729,9 @@ export function VoiceSettingsCard() {
             <div className="card raised col" style={{ gap: 8, padding: 12 }}>
               <div className="grid2">
                 <div className="field">
-                  <label>Saved Text slide to suggest</label>
+                  <label htmlFor="voice-trg-text">Saved Text slide to suggest</label>
                   <Select
+                    id="voice-trg-text"
                     ariaLabel="Saved Text for trigger rule"
                     value={newTrgTextId || savedTexts[0]?.id || ''}
                     onChange={(val: string) => setNewTrgTextId(val)}
@@ -736,6 +746,7 @@ export function VoiceSettingsCard() {
                   <div className="row" style={{ gap: 6 }}>
                     <input
                       id="voice-trg-phrases"
+                      name="voiceTriggerPhrases"
                       className="input grow"
                       placeholder="e.g. offering time, bring your seed, time to give"
                       value={newTrgPhrases}
@@ -815,6 +826,7 @@ export function VoiceSettingsCard() {
             <div className="row" style={{ gap: 8 }}>
               <input
                 id="voice-custom-vocab"
+                name="voiceCustomVocabulary"
                 className="input grow"
                 placeholder="e.g. Selah Fellowship, Pastor Adeyemi, Shiloh"
                 value={vocabInput}

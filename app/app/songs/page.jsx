@@ -73,12 +73,15 @@ function AddSongModal({ open, onClose, onSave, maxLines = 2 }) {
       <div className="two" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="col">
           {tab === "upload" ? (
-            <label className="drop">
+            <label htmlFor="song-upload-txt" className="drop">
               <div><Icon name="upload" size={28} /><div>Choose a .txt file</div></div>
-              <input type="file" accept=".txt" hidden onChange={upload} />
+              <input id="song-upload-txt" name="songFile" type="file" accept=".txt" hidden onChange={upload} />
             </label>
           ) : (
             <textarea
+              id="song-paste-lyrics"
+              name="songLyrics"
+              aria-label="Paste song lyrics"
               className="textarea"
               style={{ minHeight: 320 }}
               value={raw}
@@ -302,7 +305,7 @@ export default function SongsPage() {
           <div className="col" style={{ gap: 10 }}>
             <div className="search">
               <Icon name="search" />
-              <input className="input" style={{ height: 44, fontSize: 14 }} placeholder="Search title, author, or lyrics…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search songs" />
+              <input id="songs-search" name="songsSearch" type="search" autoComplete="off" className="input" style={{ height: 44, fontSize: 14 }} placeholder="Search title, author, or lyrics…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search songs" />
             </div>
             <div className="row wrap" style={{ gap: 8 }}>
               <Select

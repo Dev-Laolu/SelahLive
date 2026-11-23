@@ -289,11 +289,14 @@ export default function OverviewPage() {
               }}
             >
               <input
+                id="ov-service-context"
+                name="serviceContext"
                 className="input grow"
                 style={{ height: 34, fontSize: 13 }}
                 maxLength={80}
                 value={svcInput}
                 onChange={(e) => setSvcInput(e.target.value)}
+                aria-label="Add item to Today's Service Context"
                 placeholder='Add expected verse, song, or slide (e.g. "Romans 8:28", "Amazing Grace", "Offering today")…'
               />
               <button type="submit" className="btn btn-secondary btn-sm" disabled={!svcInput.trim()}>
@@ -374,10 +377,15 @@ export default function OverviewPage() {
             <Icon name="search" size={18} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
             <input
               ref={inputRef}
+              id="ov-global-search"
+              name="globalSearch"
+              type="search"
+              autoComplete="off"
               className="input"
               style={{ paddingLeft: 42, fontSize: 16 }}
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              aria-label="Search scriptures, songs, and saved texts"
               placeholder='Search everything… e.g. "John 3:16", "Amazing Grace", "Offering" (Ctrl+K)'
             />
           </div>
@@ -498,14 +506,14 @@ export default function OverviewPage() {
             </div>
             <div className="field">
               <label htmlFor="ov-new-title">Title (optional — auto-filled from text if blank)</label>
-              <input id="ov-new-title" className="input" maxLength={100} autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="e.g. Sermon Point 1, Offering, Welcome…" />
+              <input id="ov-new-title" name="title" className="input" maxLength={100} autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="e.g. Sermon Point 1, Offering, Welcome…" />
             </div>
             <div className="field">
               <label htmlFor="ov-new-body">Text to display</label>
-              <textarea id="ov-new-body" className="textarea" style={{ minHeight: 130 }} maxLength={10000} value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="Type your announcement, note, or custom text here…" />
+              <textarea id="ov-new-body" name="body" className="textarea" style={{ minHeight: 130 }} maxLength={10000} value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="Type your announcement, note, or custom text here…" />
             </div>
-            <label className="check">
-              <input type="checkbox" checked={newFav} onChange={(e) => setNewFav(e.target.checked)} />
+            <label htmlFor="ov-new-fav" className="check">
+              <input id="ov-new-fav" name="favourite" type="checkbox" checked={newFav} onChange={(e) => setNewFav(e.target.checked)} />
               <span>Pin to Favourites on Overview &amp; Text list</span>
             </label>
             <div className="row wrap" style={{ justifyContent: "flex-end", gap: 8 }}>

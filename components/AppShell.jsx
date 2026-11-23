@@ -67,7 +67,7 @@ export function PreviewPane({ pending }) {
 
       <div className="row between" style={{ padding: "6px 0" }}>
         <div className="col" style={{ gap: 2 }}>
-          <label id="live-follow-lbl" style={{ fontSize: 13, fontWeight: 600 }}>Live follow</label>
+          <span id="live-follow-lbl" style={{ fontSize: 13, fontWeight: 600 }}>Live follow</span>
           <span className="muted" style={{ fontSize: 11 }}>{liveFollow ? "Changes update live immediately" : "Preview first — press Take Live"}</span>
         </div>
         <button
@@ -274,8 +274,9 @@ function ObsHelpModal({ onClose, user, churchName, currentPath }) {
             </div>
             <div className="grid2">
               <div className="field">
-                <label>Topic</label>
+                <label htmlFor="help-topic">Topic</label>
                 <Select
+                  id="help-topic"
                   ariaLabel="Help topic"
                   value={category}
                   onChange={setCategory}
@@ -284,13 +285,14 @@ function ObsHelpModal({ onClose, user, churchName, currentPath }) {
               </div>
               <div className="field">
                 <label htmlFor="help-subj">Subject (optional)</label>
-                <input id="help-subj" className="input" maxLength={120} placeholder="Short summary" value={subject} onChange={(e) => setSubject(e.target.value)} />
+                <input id="help-subj" name="subject" className="input" maxLength={120} placeholder="Short summary" value={subject} onChange={(e) => setSubject(e.target.value)} />
               </div>
             </div>
             <div className="field">
               <label htmlFor="help-msg">How can we help?</label>
               <textarea
                 id="help-msg"
+                name="message"
                 className="textarea"
                 style={{ minHeight: 110 }}
                 maxLength={2000}

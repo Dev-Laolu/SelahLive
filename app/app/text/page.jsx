@@ -252,7 +252,12 @@ export default function TextPage() {
           </button>
           <div className="row" style={{ gap: 6 }}>
             <input
+              id="saved-texts-search"
+              name="savedTextsSearch"
+              type="search"
+              autoComplete="off"
               className="input"
+              aria-label="Search saved texts"
               placeholder="Search saved texts…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -307,11 +312,12 @@ export default function TextPage() {
           <div className="grid2">
             <div className="field">
               <label htmlFor="t">Title (auto-filled from text if left blank)</label>
-              <input ref={titleInputRef} id="t" className="input" maxLength={100} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Offering today, Welcome, Sermon Note…" />
+              <input ref={titleInputRef} id="t" name="textTitle" className="input" maxLength={100} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Offering today, Welcome, Sermon Note…" />
             </div>
             <div className="field">
-              <label>Template</label>
+              <label htmlFor="text-template-pick">Template</label>
               <Select
+                id="text-template-pick"
                 ariaLabel="Text template"
                 value={templateId}
                 onChange={handleTemplateSelect}
@@ -326,13 +332,14 @@ export default function TextPage() {
           <div className="field">
             <div className="row between">
               <label htmlFor="b">Text</label>
-              <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current.click()}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileRef.current.click()}>
                 <Icon name="upload" size={15} />Upload .txt
               </button>
-              <input ref={fileRef} type="file" accept=".txt" hidden onChange={upload} />
+              <input ref={fileRef} id="text-upload-file" name="textUploadFile" aria-label="Upload text file" type="file" accept=".txt" hidden onChange={upload} />
             </div>
             <textarea
               id="b"
+              name="textBody"
               className="textarea"
               maxLength={10000}
               style={{ minHeight: 170 }}
@@ -346,10 +353,10 @@ export default function TextPage() {
           <div className="row between wrap" style={{ gap: 10 }}>
             <div className="field grow" style={{ maxWidth: 320 }}>
               <label htmlFor="tags">Tags / folders (comma separated)</label>
-              <input id="tags" className="input" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="Service, Giving, Youth" />
+              <input id="tags" name="textTags" className="input" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)} placeholder="Service, Giving, Youth" />
             </div>
-            <label className="check" style={{ marginTop: 18 }}>
-              <input type="checkbox" checked={favourite} onChange={(e) => setFavourite(e.target.checked)} />
+            <label htmlFor="text-fav" className="check" style={{ marginTop: 18 }}>
+              <input id="text-fav" name="textFavourite" type="checkbox" checked={favourite} onChange={(e) => setFavourite(e.target.checked)} />
               <span>Favourite (pin to top)</span>
             </label>
           </div>

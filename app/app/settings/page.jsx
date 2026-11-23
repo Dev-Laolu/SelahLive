@@ -66,7 +66,7 @@ export default function SettingsPage() {
           {obsStatus === "connected" ? <span className="chip ok"><Icon name="checkc" size={14} />Connected</span> : <span className="chip bad"><Icon name="alertc" size={14} />Not connected</span>}</div>
         {obsStatus === "error" && <div className="banner bad"><Icon name="alertc" size={18} />{OBS_ERRORS[obsError] || OBS_ERRORS.notRunning}</div>}
         <div className="field"><label htmlFor="pw">OBS WebSocket password</label>
-          <div className="pw"><input id="pw" className="input" type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} /><button className="iconbtn" aria-label={show ? "Hide password" : "Show password"} onClick={() => setShow((s) => !s)}><Icon name={show ? "eyeoff" : "eye"} size={18} /></button></div>
+          <div className="pw"><input id="pw" name="obsPassword" autoComplete="off" className="input" type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} /><button type="button" className="iconbtn" aria-label={show ? "Hide password" : "Show password"} onClick={() => setShow((s) => !s)}><Icon name={show ? "eyeoff" : "eye"} size={18} /></button></div>
           <span className="muted" style={{ fontSize: 12 }}>Saved only on this computer.</span></div>
         <div className="row wrap">
           <button className="btn btn-primary" onClick={async () => { saveObsConf({ password: pw }); const ok = await connectObs({ ...obsConf, password: pw }); toast(ok ? "Connected to OBS." : "Couldn't connect."); }}>{obsStatus === "connecting" ? "Connecting…" : obsStatus === "connected" ? "Reconnect" : "Connect"}</button>
@@ -91,7 +91,10 @@ export default function SettingsPage() {
       </div>
       <div className="card col"><h3>OBS dock</h3>
         <p className="muted" style={{ margin: 0 }}>Add this as a custom browser dock in OBS (View → Docks → Custom Browser Docks) to control Selah Live from inside OBS.</p>
-        <div className="row"><input className="input mono" readOnly value={dock} aria-label="Dock link" /><button className="btn btn-secondary" onClick={() => { navigator.clipboard?.writeText(dock); toast("Dock link copied."); }}><Icon name="copy" size={16} />Copy dock link</button></div>
+        <div className="field">
+          <label htmlFor="obs-dock-link">Dock link</label>
+          <div className="row"><input id="obs-dock-link" name="obsDockLink" className="input mono" readOnly value={dock} /><button type="button" className="btn btn-secondary" onClick={() => { navigator.clipboard?.writeText(dock); toast("Dock link copied."); }}><Icon name="copy" size={16} />Copy dock link</button></div>
+        </div>
         <span className="muted" style={{ fontSize: 12 }}>Pairing code: <b className="mono gold">{obsConf.pairId}</b></span></div>
       <VoiceSettingsCard />
       <div className="card col"><h3>Startup help</h3>
@@ -127,8 +130,11 @@ export default function SettingsPage() {
           </div>
           {syncNotice && <div className="chip ok" style={{ marginTop: 6 }}>{syncNotice}</div>}
         </div>
-        <form className="row wrap" onSubmit={handleChangePassword}>
-          <input className="input" style={{ maxWidth: 280 }} type="password" autoComplete="new-password" placeholder="New password (min 8 chars)" value={newAcctPw} onChange={(e) => setNewAcctPw(e.target.value)} aria-label="New account password" />
+        <form className="row wrap" onSubmit={handleChangePassword} style={{ alignItems: "flex-end" }}>
+          <div className="field" style={{ maxWidth: 280, flex: "1 1 220px" }}>
+            <label htmlFor="acct-new-pw">New account password</label>
+            <input id="acct-new-pw" name="newPassword" className="input" type="password" autoComplete="new-password" placeholder="New password (min 8 chars)" value={newAcctPw} onChange={(e) => setNewAcctPw(e.target.value)} />
+          </div>
           <button className="btn btn-secondary" type="submit" disabled={!newAcctPw || pwChanging}>{pwChanging ? "Updating…" : "Change password"}</button>
           <button type="button" className="btn btn-ghost" onClick={() => { logOut(); router.replace("/login"); }}><Icon name="logout" size={16} />Log out</button>
         </form>

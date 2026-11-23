@@ -265,6 +265,10 @@ export default function Dock() {
           <div className="search grow">
             <Icon name="search" size={15} style={{ left: 10 }} />
             <input
+              id="dock-search"
+              name="dockSearch"
+              type="search"
+              autoComplete="off"
               className="input"
               style={{ height: 32, fontSize: 12, paddingLeft: 32 }}
               maxLength={200}
@@ -362,6 +366,8 @@ export default function Dock() {
           {scope === "text" && (
             <form className="card raised col" style={{ gap: 5, padding: 7 }} onSubmit={pushQuickText}>
               <input
+                id="dock-quick-title"
+                name="quickTitle"
                 className="input"
                 style={{ height: 28, fontSize: 11 }}
                 maxLength={100}
@@ -371,6 +377,8 @@ export default function Dock() {
                 aria-label="Quick text title"
               />
               <textarea
+                id="dock-quick-body"
+                name="quickBody"
                 className="textarea"
                 style={{ minHeight: 46, fontSize: 11, padding: 6 }}
                 maxLength={2000}
@@ -471,7 +479,7 @@ export default function Dock() {
               <button aria-pressed={mode === "fullScreen"} onClick={() => { setMode("fullScreen"); cmd("setMode", { mode: "fullScreen" }); }}>Full</button>
             </div>
             <div className="row" style={{ gap: 5, flexShrink: 0 }}>
-              <label id="dock-follow" style={{ fontSize: 11 }} className="muted">Follow</label>
+              <span id="dock-follow" style={{ fontSize: 11 }} className="muted">Follow</span>
               <button type="button" className="toggle" style={{ transform: "scale(0.85)" }} role="switch" aria-checked={follow} aria-labelledby="dock-follow" onClick={() => { const next = !follow; setFollow(next); cmd("setFollow", { follow: next }); }} />
             </div>
           </div>

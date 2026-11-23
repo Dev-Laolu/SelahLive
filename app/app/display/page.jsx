@@ -504,12 +504,12 @@ export default function DisplayPage() {
           </div>
 
           <div className="row wrap" style={{ gap: 8 }}>
-            <label className="check" style={{ fontSize: 12 }} title="Caps canvas to 30 fps, lowers particles, disables blur">
-              <input type="checkbox" checked={!!draftStyle.performanceMode} onChange={(e) => patchDraftStyle({ performanceMode: e.target.checked })} />
+            <label htmlFor="disp-perf-mode" className="check" style={{ fontSize: 12 }} title="Caps canvas to 30 fps, lowers particles, disables blur">
+              <input id="disp-perf-mode" name="displayPerformanceMode" type="checkbox" checked={!!draftStyle.performanceMode} onChange={(e) => patchDraftStyle({ performanceMode: e.target.checked })} />
               <span>Performance mode</span>
             </label>
-            <label className="check" style={{ fontSize: 12 }} title="Replace all motion with simple fades and static backgrounds">
-              <input type="checkbox" checked={!!draftStyle.reduceMotion} onChange={(e) => patchDraftStyle({ reduceMotion: e.target.checked })} />
+            <label htmlFor="disp-reduce-motion" className="check" style={{ fontSize: 12 }} title="Replace all motion with simple fades and static backgrounds">
+              <input id="disp-reduce-motion" name="displayReduceMotion" type="checkbox" checked={!!draftStyle.reduceMotion} onChange={(e) => patchDraftStyle({ reduceMotion: e.target.checked })} />
               <span>Reduce motion</span>
             </label>
             {view === "editor" && (
@@ -551,9 +551,9 @@ export default function DisplayPage() {
                   options={styleTags}
                 />
               </div>
-              <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
+              <label htmlFor="disp-import-theme" className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
                 <Icon name="upload" size={15} /> Import .selah-theme.json
-                <input type="file" hidden accept=".json,.selah-theme.json" onChange={(e) => { importThemeFile(e.target.files?.[0]); e.target.value = ""; }} />
+                <input id="disp-import-theme" name="importThemeFile" type="file" hidden accept=".json,.selah-theme.json" onChange={(e) => { importThemeFile(e.target.files?.[0]); e.target.value = ""; }} />
               </label>
             </div>
 
@@ -655,8 +655,8 @@ export default function DisplayPage() {
                 </div>
               </div>
               <div className="row wrap" style={{ gap: 8 }}>
-                <label className="check" style={{ fontSize: 12 }}>
-                  <input type="checkbox" checked={showGuides} onChange={(e) => setShowGuides(e.target.checked)} />
+                <label htmlFor="disp-show-guides" className="check" style={{ fontSize: 12 }}>
+                  <input id="disp-show-guides" name="showGuides" type="checkbox" checked={showGuides} onChange={(e) => setShowGuides(e.target.checked)} />
                   <span>Guides</span>
                 </label>
                 <button className="btn btn-secondary btn-sm" onClick={() => setAnimReplay((k) => k + 1)}>
@@ -791,12 +791,13 @@ export default function DisplayPage() {
                   <div className="col" style={{ gap: 12 }}>
                     <div className="grid2">
                       <div className="field">
-                        <label>Background type</label>
-                        <Select ariaLabel="Background type" value={layout.bgType} onChange={(v) => patchLayout({ bgType: v })} options={BG_TYPES} />
+                        <label htmlFor="bg-type">Background type</label>
+                        <Select id="bg-type" ariaLabel="Background type" value={layout.bgType} onChange={(v) => patchLayout({ bgType: v })} options={BG_TYPES} />
                       </div>
                       <div className="field">
-                        <label>Layout space rule</label>
+                        <label htmlFor="bg-layout-flow">Layout space rule</label>
                         <Select
+                          id="bg-layout-flow"
                           ariaLabel="Layout space reallocation"
                           value={layout.layoutFlow}
                           onChange={(v) => patchLayout({ layoutFlow: v })}
@@ -812,33 +813,33 @@ export default function DisplayPage() {
                     {layout.bgType === "solid" && (
                       <div className="grid2">
                         <div className="field">
-                          <label>Background colour</label>
+                          <label htmlFor="bg-color-hex">Background colour</label>
                           <div className="row">
-                            <input type="color" value={layout.bgColor} onChange={(e) => patchLayout({ bgColor: e.target.value })} />
-                            <input className="input mono" value={layout.bgColor} onChange={(e) => patchLayout({ bgColor: e.target.value })} />
+                            <input id="bg-color-swatch" name="bgColorSwatch" aria-label="Background colour picker" type="color" value={layout.bgColor} onChange={(e) => patchLayout({ bgColor: e.target.value })} />
+                            <input id="bg-color-hex" name="bgColor" className="input mono" value={layout.bgColor} onChange={(e) => patchLayout({ bgColor: e.target.value })} />
                           </div>
                         </div>
                         <div className="field">
-                          <label>Opacity ({layout.bgOpacity}%)</label>
-                          <input type="range" min={0} max={100} value={layout.bgOpacity} onChange={(e) => patchLayout({ bgOpacity: +e.target.value })} />
+                          <label htmlFor="bg-opacity">Opacity ({layout.bgOpacity}%)</label>
+                          <input id="bg-opacity" name="bgOpacity" type="range" min={0} max={100} value={layout.bgOpacity} onChange={(e) => patchLayout({ bgOpacity: +e.target.value })} />
                         </div>
                       </div>
                     )}
 
                     {(layout.bgType === "gradient" || layout.bgType === "animated-gradient") && (
                       <div className="grid3">
-                        <div className="field"><label>Stop 1</label><input type="color" value={layout.gradientStops[0] || "#0B1020"} onChange={(e) => patchLayout({ gradientStops: [e.target.value, layout.gradientStops[1] || "#17254A", layout.gradientStops[2] || "#0B1020"] })} /></div>
-                        <div className="field"><label>Stop 2</label><input type="color" value={layout.gradientStops[1] || "#17254A"} onChange={(e) => patchLayout({ gradientStops: [layout.gradientStops[0] || "#0B1020", e.target.value, layout.gradientStops[2] || "#0B1020"] })} /></div>
-                        <div className="field"><label>Angle ({layout.gradientAngle}°)</label><input type="range" min={0} max={360} value={layout.gradientAngle} onChange={(e) => patchLayout({ gradientAngle: +e.target.value })} /></div>
+                        <div className="field"><label htmlFor="bg-grad-1">Stop 1</label><input id="bg-grad-1" name="gradientStop1" type="color" value={layout.gradientStops[0] || "#0B1020"} onChange={(e) => patchLayout({ gradientStops: [e.target.value, layout.gradientStops[1] || "#17254A", layout.gradientStops[2] || "#0B1020"] })} /></div>
+                        <div className="field"><label htmlFor="bg-grad-2">Stop 2</label><input id="bg-grad-2" name="gradientStop2" type="color" value={layout.gradientStops[1] || "#17254A"} onChange={(e) => patchLayout({ gradientStops: [layout.gradientStops[0] || "#0B1020", e.target.value, layout.gradientStops[2] || "#0B1020"] })} /></div>
+                        <div className="field"><label htmlFor="bg-grad-angle">Angle ({layout.gradientAngle}°)</label><input id="bg-grad-angle" name="gradientAngle" type="range" min={0} max={360} value={layout.gradientAngle} onChange={(e) => patchLayout({ gradientAngle: +e.target.value })} /></div>
                       </div>
                     )}
 
                     {layout.bgType === "image" && (
                       <div className="col" style={{ gap: 10 }}>
                         <div className="row wrap" style={{ gap: 8 }}>
-                          <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
+                          <label htmlFor="bg-img-upload" className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
                             <Icon name="upload" size={14} /> Upload image (PNG/JPG/WebP ≤ 1 MB)
-                            <input type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && handleBgImageUpload(e.target.files[0])} />
+                            <input id="bg-img-upload" name="bgImageFile" type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && handleBgImageUpload(e.target.files[0])} />
                           </label>
                           <button
                             className="btn btn-ghost btn-sm"
@@ -853,8 +854,8 @@ export default function DisplayPage() {
                           </button>
                         </div>
                         <div className="field">
-                          <label>Image fit</label>
-                          <Select ariaLabel="Background fit" value={layout.bgFit} onChange={(v) => patchLayout({ bgFit: v })} options={FIT_MODES} />
+                          <label htmlFor="bg-img-fit">Image fit</label>
+                          <Select id="bg-img-fit" ariaLabel="Background fit" value={layout.bgFit} onChange={(v) => patchLayout({ bgFit: v })} options={FIT_MODES} />
                         </div>
                       </div>
                     )}
@@ -864,33 +865,33 @@ export default function DisplayPage() {
                       <b>Background motion (code-generated, lightweight)</b>
                       <div className="grid2">
                         <div className="field">
-                          <label>Motion effect</label>
-                          <Select ariaLabel="Background motion" value={layout.bgMotion?.type || "none"} onChange={(v) => patchLayout({ bgMotion: { ...layout.bgMotion, type: v } })} options={BG_MOTIONS} />
+                          <label htmlFor="bg-motion-type">Motion effect</label>
+                          <Select id="bg-motion-type" ariaLabel="Background motion" value={layout.bgMotion?.type || "none"} onChange={(v) => patchLayout({ bgMotion: { ...layout.bgMotion, type: v } })} options={BG_MOTIONS} />
                         </div>
                         <div className="field">
-                          <label>Motion accent colour</label>
-                          <input type="color" value={layout.bgMotion?.color || "#E8B84A"} onChange={(e) => patchLayout({ bgMotion: { ...layout.bgMotion, color: e.target.value } })} />
+                          <label htmlFor="bg-motion-color">Motion accent colour</label>
+                          <input id="bg-motion-color" name="bgMotionColor" type="color" value={layout.bgMotion?.color || "#E8B84A"} onChange={(e) => patchLayout({ bgMotion: { ...layout.bgMotion, color: e.target.value } })} />
                         </div>
                       </div>
                       {layout.bgMotion?.type !== "none" && (
                         <div className="grid2">
-                          <div className="field"><label>Speed ({layout.bgMotion?.speed ?? 50}%)</label><input type="range" min={10} max={100} value={layout.bgMotion?.speed ?? 50} onChange={(e) => patchLayout({ bgMotion: { ...layout.bgMotion, speed: +e.target.value } })} /></div>
-                          <div className="field"><label>Intensity ({layout.bgMotion?.intensity ?? 45}%)</label><input type="range" min={10} max={100} value={layout.bgMotion?.intensity ?? 45} onChange={(e) => patchLayout({ bgMotion: { ...layout.bgMotion, intensity: +e.target.value } })} /></div>
+                          <div className="field"><label htmlFor="bg-motion-speed">Speed ({layout.bgMotion?.speed ?? 50}%)</label><input id="bg-motion-speed" name="bgMotionSpeed" type="range" min={10} max={100} value={layout.bgMotion?.speed ?? 50} onChange={(e) => patchLayout({ bgMotion: { ...layout.bgMotion, speed: +e.target.value } })} /></div>
+                          <div className="field"><label htmlFor="bg-motion-intensity">Intensity ({layout.bgMotion?.intensity ?? 45}%)</label><input id="bg-motion-intensity" name="bgMotionIntensity" type="range" min={10} max={100} value={layout.bgMotion?.intensity ?? 45} onChange={(e) => patchLayout({ bgMotion: { ...layout.bgMotion, intensity: +e.target.value } })} /></div>
                         </div>
                       )}
                     </div>
 
                     {/* Container Entrance & Exit (V1.2 §4.4) */}
                     <div className="grid3">
-                      <div className="field"><label>Entrance</label><Select ariaLabel="Container entrance" value={layout.entrance} onChange={(v) => patchLayout({ entrance: v })} options={TRANSITION_TYPES} /></div>
-                      <div className="field"><label>Exit</label><Select ariaLabel="Container exit" value={layout.exit || layout.entrance} onChange={(v) => patchLayout({ exit: v })} options={TRANSITION_TYPES} /></div>
-                      <div className="field"><label>Duration ({layout.transitionDuration}ms)</label><input type="range" min={0} max={1200} step={50} value={layout.transitionDuration} onChange={(e) => patchLayout({ transitionDuration: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="bg-entrance">Entrance</label><Select id="bg-entrance" ariaLabel="Container entrance" value={layout.entrance} onChange={(v) => patchLayout({ entrance: v })} options={TRANSITION_TYPES} /></div>
+                      <div className="field"><label htmlFor="bg-exit">Exit</label><Select id="bg-exit" ariaLabel="Container exit" value={layout.exit || layout.entrance} onChange={(v) => patchLayout({ exit: v })} options={TRANSITION_TYPES} /></div>
+                      <div className="field"><label htmlFor="bg-trans-dur">Duration ({layout.transitionDuration}ms)</label><input id="bg-trans-dur" name="transitionDuration" type="range" min={0} max={1200} step={50} value={layout.transitionDuration} onChange={(e) => patchLayout({ transitionDuration: +e.target.value })} /></div>
                     </div>
 
                     <div className="grid3">
-                      <div className="field"><label>Corner radius ({layout.radius}px)</label><input type="range" min={0} max={60} value={layout.radius} onChange={(e) => patchLayout({ radius: +e.target.value })} /></div>
-                      <div className="field"><label>Accent bar ({layout.accentBarHeight}px)</label><input type="range" min={0} max={12} value={layout.accentBarHeight} onChange={(e) => patchLayout({ accentBarHeight: +e.target.value })} /></div>
-                      <div className="field"><label>Accent colour</label><input type="color" value={layout.accentBarColor} onChange={(e) => patchLayout({ accentBarColor: e.target.value })} /></div>
+                      <div className="field"><label htmlFor="bg-radius">Corner radius ({layout.radius}px)</label><input id="bg-radius" name="cornerRadius" type="range" min={0} max={60} value={layout.radius} onChange={(e) => patchLayout({ radius: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="bg-accent-h">Accent bar ({layout.accentBarHeight}px)</label><input id="bg-accent-h" name="accentBarHeight" type="range" min={0} max={12} value={layout.accentBarHeight} onChange={(e) => patchLayout({ accentBarHeight: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="bg-accent-c">Accent colour</label><input id="bg-accent-c" name="accentBarColor" type="color" value={layout.accentBarColor} onChange={(e) => patchLayout({ accentBarColor: e.target.value })} /></div>
                     </div>
                   </div>
                 )}
@@ -899,8 +900,8 @@ export default function DisplayPage() {
                 {selectedEl === "divider" && (
                   <div className="col" style={{ gap: 12 }}>
                     <div className="row wrap" style={{ gap: 8 }}>
-                      <label className="check">
-                        <input type="checkbox" checked={!!els.divider.visible} onChange={(e) => patchElement("divider", { visible: e.target.checked })} />
+                      <label htmlFor="div-visible" className="check">
+                        <input id="div-visible" name="dividerVisible" type="checkbox" checked={!!els.divider.visible} onChange={(e) => patchElement("divider", { visible: e.target.checked })} />
                         <span>Show divider line</span>
                       </label>
                       <button
@@ -917,19 +918,19 @@ export default function DisplayPage() {
                       </button>
                     </div>
                     <div className="grid3">
-                      <div className="field"><label>Style</label><Select ariaLabel="Divider style" value={els.divider.style} onChange={(v) => patchElement("divider", { style: v })} options={DIVIDER_STYLES} /></div>
-                      <div className="field"><label>Thickness ({els.divider.thickness}px)</label><input type="range" min={1} max={12} value={els.divider.thickness} onChange={(e) => patchElement("divider", { thickness: +e.target.value })} /></div>
-                      <div className="field"><label>Colour</label><input type="color" value={els.divider.color} onChange={(e) => patchElement("divider", { color: e.target.value })} /></div>
+                      <div className="field"><label htmlFor="div-style">Style</label><Select id="div-style" ariaLabel="Divider style" value={els.divider.style} onChange={(v) => patchElement("divider", { style: v })} options={DIVIDER_STYLES} /></div>
+                      <div className="field"><label htmlFor="div-thick">Thickness ({els.divider.thickness}px)</label><input id="div-thick" name="dividerThickness" type="range" min={1} max={12} value={els.divider.thickness} onChange={(e) => patchElement("divider", { thickness: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="div-color">Colour</label><input id="div-color" name="dividerColor" type="color" value={els.divider.color} onChange={(e) => patchElement("divider", { color: e.target.value })} /></div>
                     </div>
                     <div className="grid3">
-                      <div className="field"><label>Length mode</label><Select ariaLabel="Length mode" value={els.divider.lengthMode} onChange={(v) => patchElement("divider", { lengthMode: v })} options={[{ value: "full", label: "Full width" }, { value: "percent", label: "Percentage (%)" }, { value: "px", label: "Fixed pixels (px)" }]} /></div>
-                      <div className="field"><label>Length ({els.divider.lengthValue})</label><input type="range" min={10} max={els.divider.lengthMode === "px" ? 1200 : 100} value={els.divider.lengthValue} onChange={(e) => patchElement("divider", { lengthValue: +e.target.value })} /></div>
-                      <div className="field"><label>Align</label><Select ariaLabel="Divider align" value={els.divider.align} onChange={(v) => patchElement("divider", { align: v })} options={["left", "center", "right"]} /></div>
+                      <div className="field"><label htmlFor="div-len-mode">Length mode</label><Select id="div-len-mode" ariaLabel="Length mode" value={els.divider.lengthMode} onChange={(v) => patchElement("divider", { lengthMode: v })} options={[{ value: "full", label: "Full width" }, { value: "percent", label: "Percentage (%)" }, { value: "px", label: "Fixed pixels (px)" }]} /></div>
+                      <div className="field"><label htmlFor="div-len-val">Length ({els.divider.lengthValue})</label><input id="div-len-val" name="dividerLength" type="range" min={10} max={els.divider.lengthMode === "px" ? 1200 : 100} value={els.divider.lengthValue} onChange={(e) => patchElement("divider", { lengthValue: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="div-align">Align</label><Select id="div-align" ariaLabel="Divider align" value={els.divider.align} onChange={(v) => patchElement("divider", { align: v })} options={["left", "center", "right"]} /></div>
                     </div>
                     <div className="grid3">
-                      <div className="field"><label>Opacity ({els.divider.opacity}%)</label><input type="range" min={5} max={100} value={els.divider.opacity} onChange={(e) => patchElement("divider", { opacity: +e.target.value })} /></div>
-                      <div className="field"><label>Space above ({els.divider.marginTop}px)</label><input type="range" min={0} max={60} value={els.divider.marginTop} onChange={(e) => patchElement("divider", { marginTop: +e.target.value })} /></div>
-                      <div className="field"><label>Space below ({els.divider.marginBottom}px)</label><input type="range" min={0} max={60} value={els.divider.marginBottom} onChange={(e) => patchElement("divider", { marginBottom: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="div-opacity">Opacity ({els.divider.opacity}%)</label><input id="div-opacity" name="dividerOpacity" type="range" min={5} max={100} value={els.divider.opacity} onChange={(e) => patchElement("divider", { opacity: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="div-mtop">Space above ({els.divider.marginTop}px)</label><input id="div-mtop" name="dividerMarginTop" type="range" min={0} max={60} value={els.divider.marginTop} onChange={(e) => patchElement("divider", { marginTop: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="div-mbot">Space below ({els.divider.marginBottom}px)</label><input id="div-mbot" name="dividerMarginBottom" type="range" min={0} max={60} value={els.divider.marginBottom} onChange={(e) => patchElement("divider", { marginBottom: +e.target.value })} /></div>
                     </div>
                     <div className="card raised col" style={{ gap: 8 }}>
                       <div className="row between wrap">
@@ -937,8 +938,8 @@ export default function DisplayPage() {
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => patchElement("divider", { x: 0, y: 0 })}>Reset position (0, 0)</button>
                       </div>
                       <div className="grid2">
-                        <div className="field"><label>Horizontal X ({els.divider.x || 0}px)</label><input type="range" min={-960} max={960} value={els.divider.x || 0} onChange={(e) => patchElement("divider", { x: +e.target.value })} /></div>
-                        <div className="field"><label>Vertical Y ({els.divider.y || 0}px)</label><input type="range" min={-540} max={540} value={els.divider.y || 0} onChange={(e) => patchElement("divider", { y: +e.target.value })} /></div>
+                        <div className="field"><label htmlFor="div-x">Horizontal X ({els.divider.x || 0}px)</label><input id="div-x" name="dividerX" type="range" min={-960} max={960} value={els.divider.x || 0} onChange={(e) => patchElement("divider", { x: +e.target.value })} /></div>
+                        <div className="field"><label htmlFor="div-y">Vertical Y ({els.divider.y || 0}px)</label><input id="div-y" name="dividerY" type="range" min={-540} max={540} value={els.divider.y || 0} onChange={(e) => patchElement("divider", { y: +e.target.value })} /></div>
                       </div>
                     </div>
                   </div>
@@ -948,19 +949,20 @@ export default function DisplayPage() {
                 {selectedEl === "logo" && (
                   <div className="col" style={{ gap: 12 }}>
                     <div className="row between wrap" style={{ gap: 8 }}>
-                      <label className="check">
-                        <input type="checkbox" checked={!!els.logo.visible} onChange={(e) => patchElement("logo", { visible: e.target.checked })} />
+                      <label htmlFor="logo-visible" className="check">
+                        <input id="logo-visible" name="logoVisible" type="checkbox" checked={!!els.logo.visible} onChange={(e) => patchElement("logo", { visible: e.target.checked })} />
                         <span>Show church logo (hiding re-allocates space)</span>
                       </label>
-                      <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
+                      <label htmlFor="logo-upload" className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
                         <Icon name="upload" size={14} /> Upload logo (≤ 2 MB)
-                        <input type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && handleBrandImageUpload("logo", e.target.files[0])} />
+                        <input id="logo-upload" name="logoFile" type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && handleBrandImageUpload("logo", e.target.files[0])} />
                       </label>
                     </div>
                     <div className="field">
                       <label htmlFor="brand-church-name">Church name text</label>
                       <input
                         id="brand-church-name"
+                        name="churchName"
                         className="input"
                         maxLength={120}
                         value={draftStyle.churchName || ""}
@@ -969,9 +971,9 @@ export default function DisplayPage() {
                       />
                     </div>
                     <div className="grid3">
-                      <div className="field"><label>Size ({els.logo.size}px)</label><input type="range" min={24} max={220} value={els.logo.size} onChange={(e) => patchElement("logo", { size: +e.target.value })} /></div>
-                      <div className="field"><label>Position</label><Select ariaLabel="Logo position" value={els.logo.position} onChange={(v) => patchElement("logo", { position: v })} options={editMode === "lowerThird" ? ["left", "right"] : ["top-left", "top-right", "bottom-left", "bottom-right"]} /></div>
-                      <div className="field"><label>Shape mask</label><Select ariaLabel="Logo mask" value={els.logo.mask} onChange={(v) => patchElement("logo", { mask: v })} options={["none", "rounded", "circle"]} /></div>
+                      <div className="field"><label htmlFor="logo-size">Size ({els.logo.size}px)</label><input id="logo-size" name="logoSize" type="range" min={24} max={220} value={els.logo.size} onChange={(e) => patchElement("logo", { size: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="logo-pos">Position</label><Select id="logo-pos" ariaLabel="Logo position" value={els.logo.position} onChange={(v) => patchElement("logo", { position: v })} options={editMode === "lowerThird" ? ["left", "right"] : ["top-left", "top-right", "bottom-left", "bottom-right"]} /></div>
+                      <div className="field"><label htmlFor="logo-mask">Shape mask</label><Select id="logo-mask" ariaLabel="Logo mask" value={els.logo.mask} onChange={(v) => patchElement("logo", { mask: v })} options={["none", "rounded", "circle"]} /></div>
                     </div>
                     {editMode === "fullScreen" && (
                       <div className="card raised col" style={{ gap: 8 }}>
@@ -980,15 +982,15 @@ export default function DisplayPage() {
                           <button type="button" className="btn btn-ghost btn-sm" onClick={() => patchElement("logo", { position: "top-left", x: 48, y: 40 })}>Reset top-left</button>
                         </div>
                         <div className="grid2">
-                          <div className="field"><label>X ({els.logo.x ?? 48}px)</label><input type="range" min={0} max={1800} value={els.logo.x ?? 48} onChange={(e) => patchElement("logo", { position: "top-left", x: +e.target.value })} /></div>
-                          <div className="field"><label>Y ({els.logo.y ?? 40}px)</label><input type="range" min={0} max={1000} value={els.logo.y ?? 40} onChange={(e) => patchElement("logo", { position: "top-left", y: +e.target.value })} /></div>
+                          <div className="field"><label htmlFor="logo-x">X ({els.logo.x ?? 48}px)</label><input id="logo-x" name="logoX" type="range" min={0} max={1800} value={els.logo.x ?? 48} onChange={(e) => patchElement("logo", { position: "top-left", x: +e.target.value })} /></div>
+                          <div className="field"><label htmlFor="logo-y">Y ({els.logo.y ?? 40}px)</label><input id="logo-y" name="logoY" type="range" min={0} max={1000} value={els.logo.y ?? 40} onChange={(e) => patchElement("logo", { position: "top-left", y: +e.target.value })} /></div>
                         </div>
                       </div>
                     )}
                     <div className="grid3">
-                      <div className="field"><label>Opacity ({els.logo.opacity}%)</label><input type="range" min={10} max={100} value={els.logo.opacity} onChange={(e) => patchElement("logo", { opacity: +e.target.value })} /></div>
-                      <div className="field"><label>Padding ({els.logo.padding}px)</label><input type="range" min={0} max={32} value={els.logo.padding} onChange={(e) => patchElement("logo", { padding: +e.target.value })} /></div>
-                      <div className="field"><label>Logo animation</label><Select ariaLabel="Logo animation" value={els.logo.anim?.type || "fade"} onChange={(v) => patchElement("logo", { anim: { ...els.logo.anim, type: v } })} options={LOGO_ANIMATIONS} /></div>
+                      <div className="field"><label htmlFor="logo-opacity">Opacity ({els.logo.opacity}%)</label><input id="logo-opacity" name="logoOpacity" type="range" min={10} max={100} value={els.logo.opacity} onChange={(e) => patchElement("logo", { opacity: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="logo-padding">Padding ({els.logo.padding}px)</label><input id="logo-padding" name="logoPadding" type="range" min={0} max={32} value={els.logo.padding} onChange={(e) => patchElement("logo", { padding: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="logo-anim">Logo animation</label><Select id="logo-anim" ariaLabel="Logo animation" value={els.logo.anim?.type || "fade"} onChange={(v) => patchElement("logo", { anim: { ...els.logo.anim, type: v } })} options={LOGO_ANIMATIONS} /></div>
                     </div>
                   </div>
                 )}
@@ -997,23 +999,23 @@ export default function DisplayPage() {
                 {selectedEl === "watermark" && (
                   <div className="col" style={{ gap: 12 }}>
                     <div className="row between wrap" style={{ gap: 8 }}>
-                      <label className="check">
-                        <input type="checkbox" checked={!!els.watermark.visible} onChange={(e) => patchElement("watermark", { visible: e.target.checked })} />
+                      <label htmlFor="wm-visible" className="check">
+                        <input id="wm-visible" name="watermarkVisible" type="checkbox" checked={!!els.watermark.visible} onChange={(e) => patchElement("watermark", { visible: e.target.checked })} />
                         <span>Show watermark</span>
                       </label>
-                      <label className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
+                      <label htmlFor="wm-upload" className="btn btn-secondary btn-sm" style={{ cursor: "pointer" }}>
                         <Icon name="upload" size={14} /> Upload watermark
-                        <input type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && handleBrandImageUpload("watermark", e.target.files[0])} />
+                        <input id="wm-upload" name="watermarkFile" type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => e.target.files?.[0] && handleBrandImageUpload("watermark", e.target.files[0])} />
                       </label>
                     </div>
                     <div className="grid3">
-                      <div className="field"><label>9-point position</label><Select ariaLabel="Watermark position" value={els.watermark.position} onChange={(v) => patchElement("watermark", { position: v })} options={WATERMARK_POSITIONS} /></div>
-                      <div className="field"><label>Size ({els.watermark.size}px)</label><input type="range" min={24} max={200} value={els.watermark.size} onChange={(e) => patchElement("watermark", { size: +e.target.value })} /></div>
-                      <div className="field"><label>Opacity ({els.watermark.opacity}%)</label><input type="range" min={5} max={100} value={els.watermark.opacity} onChange={(e) => patchElement("watermark", { opacity: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="wm-pos">9-point position</label><Select id="wm-pos" ariaLabel="Watermark position" value={els.watermark.position} onChange={(v) => patchElement("watermark", { position: v })} options={WATERMARK_POSITIONS} /></div>
+                      <div className="field"><label htmlFor="wm-size">Size ({els.watermark.size}px)</label><input id="wm-size" name="watermarkSize" type="range" min={24} max={200} value={els.watermark.size} onChange={(e) => patchElement("watermark", { size: +e.target.value })} /></div>
+                      <div className="field"><label htmlFor="wm-opacity">Opacity ({els.watermark.opacity}%)</label><input id="wm-opacity" name="watermarkOpacity" type="range" min={5} max={100} value={els.watermark.opacity} onChange={(e) => patchElement("watermark", { opacity: +e.target.value })} /></div>
                     </div>
                     <div className="grid2">
-                      <div className="field"><label>Blend mode</label><Select ariaLabel="Watermark blend" value={els.watermark.blend} onChange={(v) => patchElement("watermark", { blend: v })} options={["normal", "multiply"]} /></div>
-                      <div className="field"><label>Animation</label><Select ariaLabel="Watermark animation" value={els.watermark.anim?.type || "fade"} onChange={(v) => patchElement("watermark", { anim: { ...els.watermark.anim, type: v } })} options={["none", "fade"]} /></div>
+                      <div className="field"><label htmlFor="wm-blend">Blend mode</label><Select id="wm-blend" ariaLabel="Watermark blend" value={els.watermark.blend} onChange={(v) => patchElement("watermark", { blend: v })} options={["normal", "multiply"]} /></div>
+                      <div className="field"><label htmlFor="wm-anim">Animation</label><Select id="wm-anim" ariaLabel="Watermark animation" value={els.watermark.anim?.type || "fade"} onChange={(v) => patchElement("watermark", { anim: { ...els.watermark.anim, type: v } })} options={["none", "fade"]} /></div>
                     </div>
                   </div>
                 )}
@@ -1022,8 +1024,8 @@ export default function DisplayPage() {
                 {activeTextEl && (
                   <div className="col" style={{ gap: 12 }}>
                     <div className="row between wrap" style={{ gap: 8 }}>
-                      <label className="check">
-                        <input type="checkbox" checked={!!activeTextEl.visible} onChange={(e) => patchElement(selectedEl, { visible: e.target.checked })} />
+                      <label htmlFor="txt-el-visible" className="check">
+                        <input id="txt-el-visible" name="textElVisible" type="checkbox" checked={!!activeTextEl.visible} onChange={(e) => patchElement(selectedEl, { visible: e.target.checked })} />
                         <span>Visible</span>
                       </label>
                       <div className="row wrap" style={{ gap: 6 }}>
@@ -1044,6 +1046,7 @@ export default function DisplayPage() {
                         <label htmlFor="church-name-input">Church name text</label>
                         <input
                           id="church-name-input"
+                          name="churchNameText"
                           className="input"
                           maxLength={120}
                           value={draftStyle.churchName || ""}
@@ -1055,8 +1058,8 @@ export default function DisplayPage() {
 
                     {selectedEl === "customText" && (
                       <div className="field">
-                        <label>Custom text content</label>
-                        <input className="input" value={activeTextEl.text || ""} placeholder="e.g. Online: yourchurch.org/give" onChange={(e) => patchElement("customText", { text: e.target.value })} />
+                        <label htmlFor="custom-text-content">Custom text content</label>
+                        <input id="custom-text-content" name="customTextContent" className="input" value={activeTextEl.text || ""} placeholder="e.g. Online: yourchurch.org/give" onChange={(e) => patchElement("customText", { text: e.target.value })} />
                       </div>
                     )}
 
@@ -1072,12 +1075,12 @@ export default function DisplayPage() {
                       </div>
                       <div className="grid2">
                         <div className="field">
-                          <label>Horizontal X offset ({activeTextEl.x || 0}px)</label>
-                          <input type="range" min={-960} max={960} value={activeTextEl.x || 0} onChange={(e) => patchElement(selectedEl, { x: +e.target.value })} />
+                          <label htmlFor="txt-el-x">Horizontal X offset ({activeTextEl.x || 0}px)</label>
+                          <input id="txt-el-x" name="textElX" type="range" min={-960} max={960} value={activeTextEl.x || 0} onChange={(e) => patchElement(selectedEl, { x: +e.target.value })} />
                         </div>
                         <div className="field">
-                          <label>Vertical Y offset ({activeTextEl.y || 0}px)</label>
-                          <input type="range" min={-540} max={540} value={activeTextEl.y || 0} onChange={(e) => patchElement(selectedEl, { y: +e.target.value })} />
+                          <label htmlFor="txt-el-y">Vertical Y offset ({activeTextEl.y || 0}px)</label>
+                          <input id="txt-el-y" name="textElY" type="range" min={-540} max={540} value={activeTextEl.y || 0} onChange={(e) => patchElement(selectedEl, { y: +e.target.value })} />
                         </div>
                       </div>
                     </div>
@@ -1087,14 +1090,14 @@ export default function DisplayPage() {
                       <div className="card raised col" style={{ gap: 10 }}>
                         <b>Reference line &amp; border box options</b>
                         <div className="grid3">
-                          <div className="field"><label>Position</label><Select ariaLabel="Reference position" value={layout.refPosition} onChange={(v) => patchLayout({ refPosition: v })} options={REF_POSITIONS} /></div>
-                          <div className="field"><label>Format</label><Select ariaLabel="Reference format" value={layout.refFormat || "full"} onChange={(v) => patchLayout({ refFormat: v })} options={REF_FORMATS} /></div>
-                          <div className="field"><label>Separator</label><input className="input" value={layout.refSeparator} placeholder=" · " onChange={(e) => patchLayout({ refSeparator: e.target.value })} /></div>
+                          <div className="field"><label htmlFor="ref-pos">Position</label><Select id="ref-pos" ariaLabel="Reference position" value={layout.refPosition} onChange={(v) => patchLayout({ refPosition: v })} options={REF_POSITIONS} /></div>
+                          <div className="field"><label htmlFor="ref-fmt">Format</label><Select id="ref-fmt" ariaLabel="Reference format" value={layout.refFormat || "full"} onChange={(v) => patchLayout({ refFormat: v })} options={REF_FORMATS} /></div>
+                          <div className="field"><label htmlFor="ref-sep">Separator</label><input id="ref-sep" name="refSeparator" className="input" value={layout.refSeparator} placeholder=" · " onChange={(e) => patchLayout({ refSeparator: e.target.value })} /></div>
                         </div>
                         <div className="grid3">
-                          <div className="field"><label>Border box</label><Select ariaLabel="Reference box style" value={layout.refBox?.style || "none"} onChange={(v) => patchLayout({ refBox: { ...layout.refBox, style: v } })} options={REF_BOX_STYLES} /></div>
-                          <div className="field"><label>Box border colour</label><input type="color" value={layout.refBox?.borderColor || "#E8B84A"} onChange={(e) => patchLayout({ refBox: { ...layout.refBox, borderColor: e.target.value } })} /></div>
-                          <div className="field"><label>Box thickness ({layout.refBox?.borderWidth ?? 1.5}px)</label><input type="range" min={1} max={6} step={0.5} value={layout.refBox?.borderWidth ?? 1.5} onChange={(e) => patchLayout({ refBox: { ...layout.refBox, borderWidth: +e.target.value } })} /></div>
+                          <div className="field"><label htmlFor="ref-box-style">Border box</label><Select id="ref-box-style" ariaLabel="Reference box style" value={layout.refBox?.style || "none"} onChange={(v) => patchLayout({ refBox: { ...layout.refBox, style: v } })} options={REF_BOX_STYLES} /></div>
+                          <div className="field"><label htmlFor="ref-box-color">Box border colour</label><input id="ref-box-color" name="refBoxBorderColor" type="color" value={layout.refBox?.borderColor || "#E8B84A"} onChange={(e) => patchLayout({ refBox: { ...layout.refBox, borderColor: e.target.value } })} /></div>
+                          <div className="field"><label htmlFor="ref-box-width">Box thickness ({layout.refBox?.borderWidth ?? 1.5}px)</label><input id="ref-box-width" name="refBoxBorderWidth" type="range" min={1} max={6} step={0.5} value={layout.refBox?.borderWidth ?? 1.5} onChange={(e) => patchLayout({ refBox: { ...layout.refBox, borderWidth: +e.target.value } })} /></div>
                         </div>
                       </div>
                     )}
@@ -1102,21 +1105,21 @@ export default function DisplayPage() {
                     {/* Typography */}
                     <div className="grid2">
                       <div className="field">
-                        <label>Font family</label>
+                        <label htmlFor="txt-font-family">Font family</label>
                         <div className="row" style={{ gap: 6 }}>
                           <div className="grow">
-                            <Select ariaLabel="Font family" value={activeTextEl.fontFamily} onChange={(v) => patchElement(selectedEl, { fontFamily: v })} options={allFontOpts} />
+                            <Select id="txt-font-family" ariaLabel="Font family" value={activeTextEl.fontFamily} onChange={(v) => patchElement(selectedEl, { fontFamily: v })} options={allFontOpts} />
                           </div>
-                          <label className="btn btn-secondary btn-sm" title="Upload .woff2 font" style={{ cursor: "pointer" }}>
+                          <label htmlFor="txt-font-upload" className="btn btn-secondary btn-sm" title="Upload .woff2 font" style={{ cursor: "pointer" }}>
                             .woff2
-                            <input type="file" hidden accept=".woff2" onChange={(e) => e.target.files?.[0] && handleFontUpload(e.target.files[0])} />
+                            <input id="txt-font-upload" name="fontUploadFile" type="file" hidden accept=".woff2" onChange={(e) => e.target.files?.[0] && handleFontUpload(e.target.files[0])} />
                           </label>
                         </div>
                       </div>
                       <div className="field">
-                        <label>Size ({activeTextEl.fontSize}px) · Weight ({activeTextEl.weight})</label>
+                        <label htmlFor="txt-font-size">Size ({activeTextEl.fontSize}px) · Weight ({activeTextEl.weight})</label>
                         <div className="row" style={{ gap: 8 }}>
-                          <input type="range" min={14} max={140} value={activeTextEl.fontSize} onChange={(e) => patchElement(selectedEl, { fontSize: +e.target.value })} />
+                          <input id="txt-font-size" name="textFontSize" type="range" min={14} max={140} value={activeTextEl.fontSize} onChange={(e) => patchElement(selectedEl, { fontSize: +e.target.value })} />
                           <Select ariaLabel="Font weight" style={{ width: 110 }} value={String(activeTextEl.weight)} onChange={(v) => patchElement(selectedEl, { weight: +v })} options={["400", "500", "600", "700", "800", "900"]} />
                         </div>
                       </div>
@@ -1143,10 +1146,10 @@ export default function DisplayPage() {
                     {/* Colour + Swatches + Opacity + Spacing */}
                     <div className="grid3">
                       <div className="field">
-                        <label>Colour</label>
+                        <label htmlFor="txt-color-hex">Colour</label>
                         <div className="row" style={{ gap: 6 }}>
-                          <input type="color" value={activeTextEl.color} onChange={(e) => patchElement(selectedEl, { color: e.target.value })} />
-                          <input className="input mono" value={activeTextEl.color} onChange={(e) => patchElement(selectedEl, { color: e.target.value })} />
+                          <input id="txt-color-swatch" name="textColorSwatch" aria-label="Text colour picker" type="color" value={activeTextEl.color} onChange={(e) => patchElement(selectedEl, { color: e.target.value })} />
+                          <input id="txt-color-hex" name="textColor" className="input mono" value={activeTextEl.color} onChange={(e) => patchElement(selectedEl, { color: e.target.value })} />
                         </div>
                         <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>
                           {DEFAULT_BRAND_SWATCHES.map((c) => (
@@ -1155,14 +1158,14 @@ export default function DisplayPage() {
                         </div>
                       </div>
                       <div className="field">
-                        <label>Letter spacing ({activeTextEl.letterSpacing}px) · Line height ({activeTextEl.lineHeight})</label>
-                        <input type="range" min={-2} max={12} step={0.5} value={activeTextEl.letterSpacing} onChange={(e) => patchElement(selectedEl, { letterSpacing: +e.target.value })} />
-                        <input type="range" min={0.9} max={2.0} step={0.05} value={activeTextEl.lineHeight} onChange={(e) => patchElement(selectedEl, { lineHeight: +e.target.value })} />
+                        <label htmlFor="txt-letter-spacing">Letter spacing ({activeTextEl.letterSpacing}px) · Line height ({activeTextEl.lineHeight})</label>
+                        <input id="txt-letter-spacing" name="letterSpacing" type="range" min={-2} max={12} step={0.5} value={activeTextEl.letterSpacing} onChange={(e) => patchElement(selectedEl, { letterSpacing: +e.target.value })} />
+                        <input id="txt-line-height" name="lineHeight" aria-label="Line height" type="range" min={0.9} max={2.0} step={0.05} value={activeTextEl.lineHeight} onChange={(e) => patchElement(selectedEl, { lineHeight: +e.target.value })} />
                       </div>
                       <div className="field">
-                        <label>Opacity ({activeTextEl.opacity}%) · Auto-fit</label>
-                        <input type="range" min={10} max={100} value={activeTextEl.opacity} onChange={(e) => patchElement(selectedEl, { opacity: +e.target.value })} />
-                        <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={!!activeTextEl.autoFit} onChange={(e) => patchElement(selectedEl, { autoFit: e.target.checked })} />Auto-fit text</label>
+                        <label htmlFor="txt-opacity">Opacity ({activeTextEl.opacity}%) · Auto-fit</label>
+                        <input id="txt-opacity" name="textOpacity" type="range" min={10} max={100} value={activeTextEl.opacity} onChange={(e) => patchElement(selectedEl, { opacity: +e.target.value })} />
+                        <label htmlFor="txt-autofit" className="check" style={{ fontSize: 12 }}><input id="txt-autofit" name="textAutoFit" type="checkbox" checked={!!activeTextEl.autoFit} onChange={(e) => patchElement(selectedEl, { autoFit: e.target.checked })} />Auto-fit text</label>
                       </div>
                     </div>
 
@@ -1171,27 +1174,27 @@ export default function DisplayPage() {
                       <b>Effects (Shadow · Outline · Glow · Highlight)</b>
                       <div className="grid3">
                         <div className="col" style={{ gap: 4 }}>
-                          <label className="check"><input type="checkbox" checked={!!activeTextEl.shadow?.enabled} onChange={(e) => patchElement(selectedEl, { shadow: { ...activeTextEl.shadow, enabled: e.target.checked } })} />Shadow</label>
+                          <label htmlFor="fx-shadow-en" className="check"><input id="fx-shadow-en" name="shadowEnabled" type="checkbox" checked={!!activeTextEl.shadow?.enabled} onChange={(e) => patchElement(selectedEl, { shadow: { ...activeTextEl.shadow, enabled: e.target.checked } })} />Shadow</label>
                           {activeTextEl.shadow?.enabled && (
                             <div className="row" style={{ gap: 4 }}>
-                              <input type="color" value={activeTextEl.shadow.color} onChange={(e) => patchElement(selectedEl, { shadow: { ...activeTextEl.shadow, color: e.target.value } })} />
-                              <input type="range" min={0} max={40} value={activeTextEl.shadow.blur} onChange={(e) => patchElement(selectedEl, { shadow: { ...activeTextEl.shadow, blur: +e.target.value } })} />
+                              <input id="fx-shadow-color" name="shadowColor" aria-label="Shadow colour" type="color" value={activeTextEl.shadow.color} onChange={(e) => patchElement(selectedEl, { shadow: { ...activeTextEl.shadow, color: e.target.value } })} />
+                              <input id="fx-shadow-blur" name="shadowBlur" aria-label="Shadow blur" type="range" min={0} max={40} value={activeTextEl.shadow.blur} onChange={(e) => patchElement(selectedEl, { shadow: { ...activeTextEl.shadow, blur: +e.target.value } })} />
                             </div>
                           )}
                         </div>
                         <div className="col" style={{ gap: 4 }}>
-                          <label style={{ fontSize: 12 }}>Outline ({activeTextEl.outline?.width || 0}px)</label>
+                          <label htmlFor="fx-outline-width" style={{ fontSize: 12 }}>Outline ({activeTextEl.outline?.width || 0}px)</label>
                           <div className="row" style={{ gap: 4 }}>
-                            <input type="color" value={activeTextEl.outline?.color || "#000000"} onChange={(e) => patchElement(selectedEl, { outline: { ...activeTextEl.outline, color: e.target.value } })} />
-                            <input type="range" min={0} max={6} step={0.5} value={activeTextEl.outline?.width || 0} onChange={(e) => patchElement(selectedEl, { outline: { ...activeTextEl.outline, width: +e.target.value } })} />
+                            <input id="fx-outline-color" name="outlineColor" aria-label="Outline colour" type="color" value={activeTextEl.outline?.color || "#000000"} onChange={(e) => patchElement(selectedEl, { outline: { ...activeTextEl.outline, color: e.target.value } })} />
+                            <input id="fx-outline-width" name="outlineWidth" type="range" min={0} max={6} step={0.5} value={activeTextEl.outline?.width || 0} onChange={(e) => patchElement(selectedEl, { outline: { ...activeTextEl.outline, width: +e.target.value } })} />
                           </div>
                         </div>
                         <div className="col" style={{ gap: 4 }}>
-                          <label className="check"><input type="checkbox" checked={!!activeTextEl.glow?.enabled} onChange={(e) => patchElement(selectedEl, { glow: { ...activeTextEl.glow, enabled: e.target.checked } })} />Glow</label>
+                          <label htmlFor="fx-glow-en" className="check"><input id="fx-glow-en" name="glowEnabled" type="checkbox" checked={!!activeTextEl.glow?.enabled} onChange={(e) => patchElement(selectedEl, { glow: { ...activeTextEl.glow, enabled: e.target.checked } })} />Glow</label>
                           {activeTextEl.glow?.enabled && (
                             <div className="row" style={{ gap: 4 }}>
-                              <input type="color" value={activeTextEl.glow.color} onChange={(e) => patchElement(selectedEl, { glow: { ...activeTextEl.glow, color: e.target.value } })} />
-                              <input type="range" min={4} max={40} value={activeTextEl.glow.blur} onChange={(e) => patchElement(selectedEl, { glow: { ...activeTextEl.glow, blur: +e.target.value } })} />
+                              <input id="fx-glow-color" name="glowColor" aria-label="Glow colour" type="color" value={activeTextEl.glow.color} onChange={(e) => patchElement(selectedEl, { glow: { ...activeTextEl.glow, color: e.target.value } })} />
+                              <input id="fx-glow-blur" name="glowBlur" aria-label="Glow blur" type="range" min={4} max={40} value={activeTextEl.glow.blur} onChange={(e) => patchElement(selectedEl, { glow: { ...activeTextEl.glow, blur: +e.target.value } })} />
                             </div>
                           )}
                         </div>
@@ -1203,26 +1206,26 @@ export default function DisplayPage() {
                       <b>Text animation (In / Delay / Stagger)</b>
                       <div className="grid3">
                         <div className="field">
-                          <label>Animate in</label>
-                          <Select ariaLabel="Text animation in" value={activeTextEl.animIn?.type || "fade"} onChange={(v) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, type: v } })} options={TEXT_ANIMATIONS} />
+                          <label htmlFor="txt-anim-in">Animate in</label>
+                          <Select id="txt-anim-in" ariaLabel="Text animation in" value={activeTextEl.animIn?.type || "fade"} onChange={(v) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, type: v } })} options={TEXT_ANIMATIONS} />
                         </div>
                         <div className="field">
-                          <label>Duration ({activeTextEl.animIn?.duration ?? 280}ms)</label>
-                          <input type="range" min={0} max={1500} step={20} value={activeTextEl.animIn?.duration ?? 280} onChange={(e) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, duration: +e.target.value } })} />
+                          <label htmlFor="txt-anim-dur">Duration ({activeTextEl.animIn?.duration ?? 280}ms)</label>
+                          <input id="txt-anim-dur" name="textAnimDuration" type="range" min={0} max={1500} step={20} value={activeTextEl.animIn?.duration ?? 280} onChange={(e) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, duration: +e.target.value } })} />
                         </div>
                         <div className="field">
-                          <label>Delay ({activeTextEl.animIn?.delay ?? 0}ms)</label>
-                          <input type="range" min={0} max={1500} step={20} value={activeTextEl.animIn?.delay ?? 0} onChange={(e) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, delay: +e.target.value } })} />
+                          <label htmlFor="txt-anim-delay">Delay ({activeTextEl.animIn?.delay ?? 0}ms)</label>
+                          <input id="txt-anim-delay" name="textAnimDelay" type="range" min={0} max={1500} step={20} value={activeTextEl.animIn?.delay ?? 0} onChange={(e) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, delay: +e.target.value } })} />
                         </div>
                       </div>
                       <div className="grid2">
                         <div className="field">
-                          <label>Easing</label>
-                          <Select ariaLabel="Animation easing" value={activeTextEl.animIn?.easing || "ease-out"} onChange={(v) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, easing: v } })} options={EASING_TYPES} />
+                          <label htmlFor="txt-anim-easing">Easing</label>
+                          <Select id="txt-anim-easing" ariaLabel="Animation easing" value={activeTextEl.animIn?.easing || "ease-out"} onChange={(v) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, easing: v } })} options={EASING_TYPES} />
                         </div>
                         <div className="field">
-                          <label>Stagger ({activeTextEl.animIn?.stagger ?? 40}ms)</label>
-                          <input type="range" min={10} max={200} step={5} value={activeTextEl.animIn?.stagger ?? 40} onChange={(e) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, stagger: +e.target.value } })} />
+                          <label htmlFor="txt-anim-stagger">Stagger ({activeTextEl.animIn?.stagger ?? 40}ms)</label>
+                          <input id="txt-anim-stagger" name="textAnimStagger" type="range" min={10} max={200} step={5} value={activeTextEl.animIn?.stagger ?? 40} onChange={(e) => patchElement(selectedEl, { animIn: { ...activeTextEl.animIn, stagger: +e.target.value } })} />
                         </div>
                       </div>
                     </div>
@@ -1242,16 +1245,16 @@ export default function DisplayPage() {
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>Built-in templates are never overwritten. Give your template a unique name (1–60 characters).</p>
             <div className="field">
               <label htmlFor="tpl-name">Template name</label>
-              <input id="tpl-name" className="input" maxLength={60} autoFocus value={saveName} onChange={(e) => { setSaveName(e.target.value); setSaveErr(""); }} />
+              <input id="tpl-name" name="templateName" className="input" maxLength={60} autoFocus value={saveName} onChange={(e) => { setSaveName(e.target.value); setSaveErr(""); }} />
             </div>
             <div className="grid2">
               <div className="field">
-                <label>Slot</label>
-                <Select ariaLabel="Template slot" value={saveSlot} onChange={setSaveSlot} options={[{ value: "scripture", label: "Scripture" }, { value: "songs", label: "Songs" }, { value: "text", label: "Text / Announcement" }]} />
+                <label htmlFor="tpl-slot">Slot</label>
+                <Select id="tpl-slot" ariaLabel="Template slot" value={saveSlot} onChange={setSaveSlot} options={[{ value: "scripture", label: "Scripture" }, { value: "songs", label: "Songs" }, { value: "text", label: "Text / Announcement" }]} />
               </div>
               <div className="field">
-                <label>Description (optional)</label>
-                <input className="input" maxLength={240} value={saveDesc} onChange={(e) => setSaveDesc(e.target.value)} placeholder="Short note" />
+                <label htmlFor="tpl-desc">Description (optional)</label>
+                <input id="tpl-desc" name="templateDescription" className="input" maxLength={240} value={saveDesc} onChange={(e) => setSaveDesc(e.target.value)} placeholder="Short note" />
               </div>
             </div>
             {saveErr && <div className="banner bad"><Icon name="alertc" size={16} /><span>{saveErr}</span></div>}
@@ -1296,8 +1299,8 @@ export default function DisplayPage() {
           >
             <h3>Rename template</h3>
             <div className="field">
-              <label>New unique name</label>
-              <input className="input" maxLength={60} autoFocus value={renameVal} onChange={(e) => { setRenameVal(e.target.value); setRenameErr(""); }} />
+              <label htmlFor="tpl-rename">New unique name</label>
+              <input id="tpl-rename" name="templateRename" className="input" maxLength={60} autoFocus value={renameVal} onChange={(e) => { setRenameVal(e.target.value); setRenameErr(""); }} />
             </div>
             {renameErr && <div className="banner bad"><Icon name="alertc" size={16} /><span>{renameErr}</span></div>}
             <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>

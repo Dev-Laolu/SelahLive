@@ -6,6 +6,7 @@ import { DEFAULT_STYLE } from "@/lib/defaults";
 import { DEFAULT_THEMES, sanitizeTheme, migrateThemeToV2, isTemplateNameTaken } from "@/lib/themes";
 import { unifiedSearch } from "@/lib/search";
 import { runAccountSync } from "@/lib/sync";
+import { shouldSuppressAnalytics, setObsAnalyticsSuppressed } from "@/lib/firebase";
 import { VoiceProvider } from "@/src/voice/VoiceContext";
 import { gunzipSync, unzipSync } from "fflate";
 
@@ -230,7 +231,7 @@ export function AppProvider({ children }) {
       setOnline(navigator.onLine);
       setReady(true);
 
-      if (navigator.onLine) {
+      if (navigator.onLine && !shouldSuppressAnalytics() && !obs.current?.connected) {
         fetch("/api/analytics", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -777,6 +778,7 @@ export function AppProvider({ children }) {
     try {
       await obs.current.connect(c);
       setObsStatus("connected");
+      setObsAnalyticsSuppressed(true);
       setTimeout(() => {
         pushStyle(styleRef.current);
         syncAllAssetsToOverlay(false);
@@ -905,7 +907,7 @@ export function AppProvider({ children }) {
     };
 
     const unsubObs = obs.current ? obs.current.on((ev) => {
-      if (ev.type === "closed") { setObsStatus("disconnected"); return; }
+      if (ev.type === "closed") { setObsStatus("disconnected"); setObsAnalyticsSuppressed(false); return; }
       if (ev.type === "event" && ev.name === "CustomEvent") handleIncoming(ev.data);
     }) : () => { };
 
@@ -984,11 +986,13 @@ export function AppProvider({ children }) {
       if (entry.type === "bible" && !activeBibleIdRef.current) setActiveBibleId(entry.id);
       setDownloads((d) => { const n = { ...d }; delete n[entry.id]; return n; });
 
-      fetch("/api/analytics", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ event: "download", packId: entry.id }),
-      }).catch(() => { });
+      if (!shouldSuppressAnalytics() && !obs.current?.connected) {
+        fetch("/api/analytics", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ event: "download", packId: entry.id }),
+        }).catch(() => { });
+      }
 
       return true;
     } catch {

@@ -36,6 +36,23 @@ const MODEL_REPOS = {
 const TRANSFORMERS_ESM_URL =
   "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm";
 
+// Filter known harmless upstream ONNX Runtime & Transformers.js worker log spam
+// while preserving all real warnings and errors.
+const SUPPRESSED_WORKER_LOG_PATTERNS = [
+  "VerifyEachNodeIsAssignedToAnEp",
+  "Unable to determine content-length from response headers",
+];
+for (const method of ["warn", "log"]) {
+  const orig = console[method].bind(console);
+  console[method] = (...args) => {
+    const first = typeof args[0] === "string" ? args[0] : "";
+    if (SUPPRESSED_WORKER_LOG_PATTERNS.some((p) => first.includes(p))) {
+      return;
+    }
+    orig(...args);
+  };
+}
+
 let transformersLib = null;
 let isPaused = false;
 let performanceMode = false;
@@ -56,9 +73,9 @@ const SAMPLE_RATE = 16000;
 const PRE_ROLL_MAX_FRAMES = 8;          // ~256 ms pre-roll before speech onset
 const SPEECH_RMS_ONSET = 0.0075;        // Speech onset threshold (~-42.5 dBFS for laptop mics & mixers)
 const SPEECH_RMS_HOLD = 0.004;          // Speech continuation threshold (~-48 dBFS)
-const SILENCE_FRAMES_TO_FINALIZE = 13;  // ~416 ms of silence ends an utterance
-const INTERIM_INTERVAL_SAMPLES = 24000; // ~1.5 s of speech triggers an interim decode (disabled in performanceMode)
-const MAX_UTTERANCE_SAMPLES = 104000;   // ~6.5 s max utterance before forced final decode
+const SILENCE_FRAMES_TO_FINALIZE = 9;   // ~288 ms of silence ends an utterance promptly
+const INTERIM_INTERVAL_SAMPLES = 16000; // ~1.0 s of speech triggers an interim decode (disabled in performanceMode)
+const MAX_UTTERANCE_SAMPLES = 80000;    // ~5.0 s max utterance before forced final decode
 const MIN_SPEECH_SAMPLES = 6400;        // ~0.4 s minimum speech to transcribe
 
 let preRollFrames = [];
@@ -216,7 +233,7 @@ async function loadWhisperModel(modelId, explicitRepo) {
           pipe = await pipeline("automatic-speech-recognition", repo, {
             device: "webgpu",
             dtype: {
-              encoder_model: "fp32",
+              encoder_model: "fp16",
               decoder_model_merged: "q4",
             },
             session_options: { logSeverityLevel: 3 },
@@ -274,12 +291,20 @@ async function loadWhisperModel(modelId, explicitRepo) {
 /**
  * Transformers.js v3 throws if `language` or `task` is passed to an English-only
  * Whisper model (e.g. `whisper-tiny.en`, `whisper-base.en`, `whisper-small.en`).
+ * Greedy decoding (`num_beams: 1`, `max_new_tokens: 64`) keeps latency low on CPU/iGPU.
  */
 function buildAsrOptions() {
   const isEnglishOnly = !loadedModelId || String(loadedModelId).endsWith(".en");
+  const base = {
+    return_timestamps: false,
+    num_beams: 1,
+    do_sample: false,
+    max_new_tokens: 64,
+    condition_on_previous_text: false,
+  };
   return isEnglishOnly
-    ? { return_timestamps: false }
-    : { language: "english", task: "transcribe", return_timestamps: false };
+    ? base
+    : { ...base, language: "english", task: "transcribe" };
 }
 
 /**

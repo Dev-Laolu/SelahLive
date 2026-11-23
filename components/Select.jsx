@@ -155,7 +155,7 @@ export default function Select({
     <div ref={wrapRef} className={`cselect ${open ? "is-open" : ""} ${className}`} style={style} onKeyDown={handleKeyDown}>
       <button
         ref={triggerRef}
-        id={id}
+        id={id || autoId}
         type="button"
         role="combobox"
         aria-expanded={open}
@@ -177,7 +177,10 @@ export default function Select({
               <Icon name="search" size={15} className="muted" />
               <input
                 ref={searchRef}
-                type="text"
+                id={`${autoId}-search`}
+                name={`${id || autoId}-search`}
+                type="search"
+                autoComplete="off"
                 value={filter}
                 onChange={(e) => {
                   setFilter(e.target.value);
