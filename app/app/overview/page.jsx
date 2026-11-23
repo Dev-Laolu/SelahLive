@@ -9,6 +9,9 @@ import { useApp } from "@/lib/store";
 import { highlightSegments, unifiedSearch } from "@/lib/search";
 import { songSlides } from "@/lib/songs";
 import { search as searchBible } from "@/lib/bible";
+import { SuggestionTray } from "@/src/voice/ui/SuggestionTray";
+import { TranscriptPanel } from "@/src/voice/ui/TranscriptPanel";
+import { useVoice } from "@/src/voice/VoiceContext";
 
 function HighlightedText({ text, query }) {
   const segs = useMemo(() => highlightSegments(text, query), [text, query]);
@@ -26,8 +29,9 @@ export default function OverviewPage() {
     bibles, songPacks, customSongs, recentTexts, savedTexts, saveTextItem,
     favSongs, songStats, recent, pinned, updates, obsStatus, online,
     activeBibleId, live, show, updateLive, takeLive, hide, stepLive,
-    lyricsLinesPerSlide, bumpSongUse, bumpTextUse, syncNotice,
+    lyricsLinesPerSlide, bumpSongUse, bumpTextUse, syncNotice, addRecent,
   } = useApp();
+  const { settings: voiceSettings } = useVoice();
 
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all"); // all | scripture | songs | text
@@ -235,6 +239,22 @@ export default function OverviewPage() {
           )}
           {syncNotice && <span className="chip ok">{syncNotice}</span>}
         </div>
+
+        {/* SG-8: Voice Assistant Panel on Overview (all suggestion kinds + optional live transcript) */}
+        <SuggestionTray
+          bibles={bibles}
+          activeBibleId={pack?.id}
+          onOperatorShow={(sugItem) => {
+            setPending(sugItem);
+            if (live) takeLive(sugItem);
+            else show(sugItem);
+            if (sugItem.ref) addRecent(sugItem.ref);
+          }}
+          onOperatorPreview={(sugItem) => {
+            setPending(sugItem);
+          }}
+        />
+        {voiceSettings.showTranscript && <TranscriptPanel defaultOpen={true} />}
 
         {/* Live now card (V1.2 §1) */}
         <div className="card raised col" style={{ gap: 10 }}>

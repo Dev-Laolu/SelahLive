@@ -37,7 +37,9 @@ function walkFiles(dir) {
 function testStaticNoAutoDisplay() {
   const voiceDir = path.join(ROOT, "src", "voice");
   const workletFile = path.join(ROOT, "public", "worklets", "voice-capture-processor.js");
+  const publicWorkerFile = path.join(ROOT, "public", "workers", "voice-worker.js");
   const files = [...walkFiles(voiceDir), workletFile];
+  if (fs.existsSync(publicWorkerFile)) files.push(publicWorkerFile);
 
   const forbiddenPatterns = [
     /\bselah:show\b/,

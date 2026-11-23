@@ -8,6 +8,9 @@ import { useToast } from "@/components/Toast";
 import { useApp } from "@/lib/store";
 import { neighbour, getAvailableChapters, getAvailableVerses, getVerse } from "@/lib/bible";
 import { getBookSuggestions, getReferenceGuidance, highlightSegments, unifiedSearch } from "@/lib/search";
+import { SuggestionTray } from "@/src/voice/ui/SuggestionTray";
+import { TranscriptPanel } from "@/src/voice/ui/TranscriptPanel";
+import { useVoice } from "@/src/voice/VoiceContext";
 
 function HighlightedText({ text, query }) {
   const segs = useMemo(() => highlightSegments(text, query), [text, query]);
@@ -25,6 +28,7 @@ export default function ScripturePage() {
     show, updateLive, takeLive, live,
     recent, addRecent, pinned, togglePin,
   } = useApp();
+  const { settings: voiceSettings } = useVoice();
   const toast = useToast();
 
   const [q, setQ] = useState("John 3:16");
@@ -283,6 +287,25 @@ export default function ScripturePage() {
 
   return (
     <AppShell pending={item}>
+      {/* SG-8: "Suggested from voice" strip at the top of Scripture (scripture only) */}
+      <SuggestionTray
+        filterKind="scripture"
+        bibles={bibles}
+        activeBibleId={pack?.id}
+        onOperatorShow={(sugItem) => {
+          setQ(sugItem.ref || sugItem.title);
+          setSel({ ...sugItem, id: `${pack?.id}:${sugItem.title}`, text: sugItem.body });
+          if (live) takeLive(sugItem);
+          else show(sugItem);
+          if (sugItem.ref) addRecent(sugItem.ref);
+        }}
+        onOperatorPreview={(sugItem) => {
+          setQ(sugItem.ref || sugItem.title);
+          setSel({ ...sugItem, id: `${pack?.id}:${sugItem.title}`, text: sugItem.body });
+        }}
+      />
+      {voiceSettings.showTranscript && <TranscriptPanel defaultOpen={false} />}
+
       {/* Smart Search Bar + Searchable Bible Version Combobox */}
       <div className="row wrap">
         <div className="search grow">

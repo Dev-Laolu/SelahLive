@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import Icon from '@/components/Icon';
 import Select from '@/components/Select';
 import { useApp } from '@/lib/store';
@@ -8,8 +9,8 @@ import { useVoice } from '../VoiceContext';
 import { LevelMeter } from './LevelMeter';
 
 /**
- * Settings -> Voice panel (Phase 0: Audio foundation + disabled shells for Phase 1/2 engine, model, and sensitivity controls).
- * NOTE FOR DESIGN REVIEW: Flagged as a new v2 screen built strictly with existing `/design/` tokens and components.
+ * Settings -> Voice panel (Phase 1: Active Whisper primary engine, model selector, sensitivity,
+ * cloud browser opt-in with explicit warning, transcript & chime toggles).
  */
 export function VoiceSettingsCard() {
   const { bibles } = useApp();
@@ -34,6 +35,9 @@ export function VoiceSettingsCard() {
     pauseListening,
     resumeListening,
     runMicTest,
+    activeAsrMode,
+    activeEngineDetail,
+    installedModels,
   } = useVoice();
 
   const [showPermissionIntro, setShowPermissionIntro] = useState(false);
@@ -43,7 +47,6 @@ export function VoiceSettingsCard() {
       await disableVoice();
       setShowPermissionIntro(false);
     } else if (permissionState === 'unrequested') {
-      // PRD §8: Ask for mic permission only after an explanation screen; never on first launch.
       setShowPermissionIntro(true);
     } else {
       await enableAndStartListening();
@@ -76,13 +79,15 @@ export function VoiceSettingsCard() {
         }))
       : [{ value: '', label: 'Default installed Bible', sub: '' }];
 
+  const selectedModelInstalled = Boolean(installedModels[settings.whisperModel]);
+
   return (
     <div className="card col" id="voice-settings">
       <div className="row between wrap" style={{ gap: 10 }}>
         <div className="col" style={{ gap: 2 }}>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row wrap" style={{ gap: 8 }}>
             <Icon name="mic" size={18} className="gold" />
-            <h3 style={{ margin: 0 }}>Voice Suggestions (v2 Audio Foundation)</h3>
+            <h3 style={{ margin: 0 }}>Voice Suggestions (v2 Beta)</h3>
             {settings.enabled ? (
               isListening && !isPaused ? (
                 <span className="chip ok">
@@ -98,9 +103,14 @@ export function VoiceSettingsCard() {
             ) : (
               <span className="chip">Off</span>
             )}
+            {settings.enabled && activeEngineDetail && (
+              <span className="chip" style={{ fontSize: 11 }}>
+                {activeEngineDetail}
+              </span>
+            )}
           </div>
           <span className="muted" style={{ fontSize: 12 }}>
-            Listens on-device to suggest Bible verses, songs, and cues. Nothing is ever displayed automatically—you always decide.
+            Listens on-device to suggest Bible verses. Nothing is ever displayed automatically—you always decide.
           </span>
         </div>
 
@@ -339,35 +349,60 @@ export function VoiceSettingsCard() {
         )}
       </div>
 
-      {/* Phase 1/2 Disabled Engine, Model & Sensitivity Shells (per Phase 0 scope instruction) */}
+      {/* Speech Engine, Whisper Model & Sensitivity Controls (ST-1, ST-2, ST-4, SG-1) */}
       <div
         className="col"
         style={{
           gap: 12,
           paddingTop: 12,
           borderTop: '1px solid var(--border)',
-          opacity: 0.72,
         }}
-        aria-disabled="true"
       >
-        <div className="row between wrap">
-          <span className="label">Speech Recognition &amp; Matching (Activates in Phase 1)</span>
-          <span className="chip" style={{ fontSize: 11 }}>
-            Phase 1 Shell
-          </span>
+        <div className="row between wrap" style={{ gap: 8 }}>
+          <span className="label">Speech Recognition &amp; Scripture Matching</span>
+          <Link href="/app/library?tab=voice" className="btn btn-secondary btn-sm" style={{ minHeight: 28, padding: '2px 10px', fontSize: 12 }}>
+            <Icon name="download" size={13} /> Manage Voice Models in Library
+          </Link>
         </div>
+
+        {!selectedModelInstalled && (
+          <div className="banner warn" style={{ fontSize: 12 }}>
+            <Icon name="download" size={16} />
+            <span className="grow">
+              Offline Whisper model <b>{settings.whisperModel}</b> is not downloaded yet.{' '}
+              {activeAsrMode === 'browser-bridge'
+                ? 'Using temporary browser voice engine while offline model is not installed.'
+                : 'Open Library → Voice models to download it once for offline use.'}
+            </span>
+            <Link href="/app/library?tab=voice" className="btn btn-primary btn-sm">
+              Open Library
+            </Link>
+          </div>
+        )}
 
         <div className="grid2">
           <div className="field">
-            <label>Speech engine (Whisper primary)</label>
-            <div className="seg" role="group" aria-label="Speech engine (disabled in Phase 0)">
-              <button type="button" disabled aria-pressed={settings.engine === 'auto'}>
+            <label>Speech engine (Whisper is primary)</label>
+            <div className="seg" role="group" aria-label="Speech engine">
+              <button
+                type="button"
+                aria-pressed={settings.engine === 'auto'}
+                onClick={() => updateVoiceSettings({ engine: 'auto' })}
+              >
                 Auto (recommended)
               </button>
-              <button type="button" disabled aria-pressed={settings.engine === 'whisper'}>
+              <button
+                type="button"
+                aria-pressed={settings.engine === 'whisper'}
+                onClick={() => updateVoiceSettings({ engine: 'whisper' })}
+              >
                 Whisper (offline)
               </button>
-              <button type="button" disabled aria-pressed={settings.engine === 'browser'}>
+              <button
+                type="button"
+                aria-pressed={settings.engine === 'browser'}
+                onClick={() => updateVoiceSettings({ engine: 'browser' })}
+              >
                 Browser (backup)
               </button>
             </div>
@@ -375,15 +410,27 @@ export function VoiceSettingsCard() {
 
           <div className="field">
             <label>Offline Whisper model</label>
-            <div className="seg" role="group" aria-label="Whisper model (disabled in Phase 0)">
-              <button type="button" disabled aria-pressed={settings.whisperModel === 'tiny.en'}>
-                tiny.en
+            <div className="seg" role="group" aria-label="Whisper model">
+              <button
+                type="button"
+                aria-pressed={settings.whisperModel === 'tiny.en'}
+                onClick={() => updateVoiceSettings({ whisperModel: 'tiny.en' })}
+              >
+                tiny.en {installedModels['tiny.en'] ? '✓' : ''}
               </button>
-              <button type="button" disabled aria-pressed={settings.whisperModel === 'base.en'}>
-                base.en (default)
+              <button
+                type="button"
+                aria-pressed={settings.whisperModel === 'base.en'}
+                onClick={() => updateVoiceSettings({ whisperModel: 'base.en' })}
+              >
+                base.en {installedModels['base.en'] ? '✓' : ''}
               </button>
-              <button type="button" disabled aria-pressed={settings.whisperModel === 'small.en'}>
-                small.en
+              <button
+                type="button"
+                aria-pressed={settings.whisperModel === 'small.en'}
+                onClick={() => updateVoiceSettings({ whisperModel: 'small.en' })}
+              >
+                small.en {installedModels['small.en'] ? '✓' : ''}
               </button>
             </div>
           </div>
@@ -392,14 +439,26 @@ export function VoiceSettingsCard() {
         <div className="grid2">
           <div className="field">
             <label>Suggestion sensitivity</label>
-            <div className="seg" role="group" aria-label="Suggestion sensitivity (disabled in Phase 0)">
-              <button type="button" disabled aria-pressed={settings.sensitivity === 'careful'}>
+            <div className="seg" role="group" aria-label="Suggestion sensitivity">
+              <button
+                type="button"
+                aria-pressed={settings.sensitivity === 'careful'}
+                onClick={() => updateVoiceSettings({ sensitivity: 'careful' })}
+              >
                 Careful (≥ 85%)
               </button>
-              <button type="button" disabled aria-pressed={settings.sensitivity === 'balanced'}>
+              <button
+                type="button"
+                aria-pressed={settings.sensitivity === 'balanced'}
+                onClick={() => updateVoiceSettings({ sensitivity: 'balanced' })}
+              >
                 Balanced (≥ 70%)
               </button>
-              <button type="button" disabled aria-pressed={settings.sensitivity === 'eager'}>
+              <button
+                type="button"
+                aria-pressed={settings.sensitivity === 'eager'}
+                onClick={() => updateVoiceSettings({ sensitivity: 'eager' })}
+              >
                 Eager (≥ 55%)
               </button>
             </div>
@@ -418,8 +477,53 @@ export function VoiceSettingsCard() {
           </div>
         </div>
 
+        <div className="row wrap" style={{ gap: 18 }}>
+          <label className="check" style={{ fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={settings.showTranscript}
+              onChange={(e) => updateVoiceSettings({ showTranscript: e.target.checked })}
+            />
+            <span>Show collapsible live transcript panel on Overview &amp; Scripture</span>
+          </label>
+
+          <label className="check" style={{ fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={settings.chime}
+              onChange={(e) => updateVoiceSettings({ chime: e.target.checked })}
+            />
+            <span>Play soft chime when a new suggestion arrives</span>
+          </label>
+        </div>
+
+        {/* Cloud browser recognition explicit opt-in with plain warning (ST-2 & PRD §8) */}
+        <div
+          className="card raised col"
+          style={{ gap: 6, padding: 12, border: '1px solid var(--border)' }}
+        >
+          <label className="check" style={{ fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={settings.allowCloudBrowserEngine}
+              onChange={(e) =>
+                updateVoiceSettings({ allowCloudBrowserEngine: e.target.checked })
+              }
+            />
+            <span>
+              <b>Allow Cloud Browser Speech Recognition</b> (backup bridge before Whisper model is downloaded)
+            </span>
+          </label>
+          <span className="muted" style={{ fontSize: 12 }}>
+            Warning: When cloud browser recognition is used, audio is sent to your browser vendor (Google Chrome or Microsoft Edge) for transcription. Leave this off to keep 100% of audio on-device with Whisper.
+          </span>
+        </div>
+
         <div className="muted" style={{ fontSize: 12 }}>
-          <b>Shortcut:</b> Press <span className="kbd">Alt+L</span> anywhere in the app (outside text boxes) to pause or resume listening and close the microphone immediately.
+          <b>Shortcuts:</b> <span className="kbd">Alt+1…5</span> Show suggestion ·{' '}
+          <span className="kbd">Shift+Alt+1…5</span> Preview suggestion ·{' '}
+          <span className="kbd">Alt+D</span> Dismiss top card ·{' '}
+          <span className="kbd">Alt+L</span> Pause/resume listening.
         </div>
       </div>
     </div>
