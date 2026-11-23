@@ -1,2 +1,4 @@
-// Phase 1-3 scaffold — Parallel speech detectors (spoken references, quotes, songs, intent triggers)
-export {};
+export * from './spokenReferenceParser';
+export * from './verseQuoteMatcher';
+export * from './songMatcher';
+export * from './intentTriggerMatcher';

@@ -5,63 +5,104 @@ import Link from 'next/link';
 import Icon from '@/components/Icon';
 import { BOOK_NAMES, getVerse } from '@/lib/bible';
 import { useVoice, isEditableElementFocused } from '../VoiceContext';
-import type { ScripturePayload, Suggestion, SuggestionKind } from '../types';
+import type {
+  ScripturePayload,
+  SongPayload,
+  Suggestion,
+  SuggestionKind,
+  TextPayload,
+} from '../types';
 import {
   dispatchOperatorSuggestionAction,
   type OperatorGestureEvent,
 } from '../suggestions/safety';
 
 export interface ResolvedSuggestionView {
+  kind: SuggestionKind;
   title: string;
   subtitle: string;
   body: string;
+  label?: string;
   ref?: string;
   book?: number;
   chapter?: number;
   verse?: number;
+  songId?: string;
+  slideIndex?: number;
+  savedTextId?: string;
+  templateId?: string;
 }
 
 export interface SuggestionTrayProps {
-  /** Filter suggestions by kind (e.g. 'scripture' on Scripture screen, or undefined for all on Overview) */
+  /** Filter suggestions by kind (e.g. 'scripture' on Scripture screen, 'song' on Songs, 'text' on Text, or undefined for all on Overview) */
   filterKind?: SuggestionKind;
-  /** Installed Bible packs from AppProvider so ScripturePayload resolves to actual verse text */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  bibles: any[];
+  bibles?: any[];
   activeBibleId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  songs?: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  savedTexts?: any[];
   /** Invoked ONLY when the operator explicitly clicks Show or presses Alt+1..5 */
-  onOperatorShow: (item: {
-    kind: SuggestionKind;
-    title: string;
-    subtitle: string;
-    body: string;
-    ref?: string;
-    book?: number;
-    chapter?: number;
-    verse?: number;
-  }) => void;
+  onOperatorShow: (item: ResolvedSuggestionView) => void;
   /** Invoked ONLY when the operator explicitly clicks Preview or presses Shift+Alt+1..5 */
-  onOperatorPreview: (item: {
-    kind: SuggestionKind;
-    title: string;
-    subtitle: string;
-    body: string;
-    ref?: string;
-    book?: number;
-    chapter?: number;
-    verse?: number;
-  }) => void;
+  onOperatorPreview: (item: ResolvedSuggestionView) => void;
 }
 
 /**
- * Resolves a Suggestion's payload against the user's installed Bible packs in IndexedDB.
+ * Resolves any Suggestion (`scripture` | `song` | `text`) against the user's installed IndexedDB libraries.
  */
-export function resolveScriptureSuggestion(
+export function resolveSuggestionView(
   suggestion: Suggestion,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  bibles: any[],
-  activeBibleId?: string,
-  defaultVersionId?: string
+  options: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    bibles?: any[];
+    activeBibleId?: string;
+    defaultVersionId?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    songs?: any[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    savedTexts?: any[];
+  } = {}
 ): ResolvedSuggestionView {
+  const {
+    bibles = [],
+    activeBibleId,
+    defaultVersionId,
+    songs = [],
+    savedTexts = [],
+  } = options;
+
+  if (suggestion.kind === 'song') {
+    const p = suggestion.payload as SongPayload;
+    const foundSong = songs.find((s) => s.id === p.songId);
+    const slideIdx = p.slideIndex ?? 0;
+    const sec = foundSong?.sections?.[slideIdx] || foundSong?.sections?.[0];
+    return {
+      kind: 'song',
+      title: foundSong?.title || 'Song Suggestion',
+      subtitle: foundSong?.author || foundSong?.pack || 'Song',
+      body: sec?.text || p.matchedLine || '',
+      label: sec?.label || '',
+      songId: p.songId,
+      slideIndex: slideIdx,
+    };
+  }
+
+  if (suggestion.kind === 'text') {
+    const p = suggestion.payload as TextPayload;
+    const foundText = savedTexts.find((t) => t.id === p.savedTextId);
+    return {
+      kind: 'text',
+      title: foundText?.title || 'Saved Text',
+      subtitle: 'Saved Text',
+      body: foundText?.body || '',
+      savedTextId: p.savedTextId,
+      templateId: foundText?.templateId || '',
+    };
+  }
+
+  // Scripture
   const p = suggestion.payload as ScripturePayload;
   const pack =
     bibles.find((b) => b.id === (p.versionId || defaultVersionId || activeBibleId)) ||
@@ -77,6 +118,7 @@ export function resolveScriptureSuggestion(
 
   if (!pack) {
     return {
+      kind: 'scripture',
       title: refTitle,
       subtitle: '',
       body: 'Download a Bible version in Library to load verse text.',
@@ -96,6 +138,7 @@ export function resolveScriptureSuggestion(
       }
     }
     return {
+      kind: 'scripture',
       title: refTitle,
       subtitle: pack.code || pack.name || '',
       body: parts.join(' ') || `Open ${refTitle}`,
@@ -108,6 +151,7 @@ export function resolveScriptureSuggestion(
 
   const gv = getVerse(pack, p.book, p.chapter, vStart);
   return {
+    kind: 'scripture',
     title: refTitle,
     subtitle: pack.code || pack.name || '',
     body: gv?.text || `Open ${refTitle}`,
@@ -118,22 +162,35 @@ export function resolveScriptureSuggestion(
   };
 }
 
-/**
- * Suggestion Tray (SG-1 through SG-8).
- *
- * - Displays up to 5 suggestion cards with: icon, title (e.g. John 3:16), 1-2 line snippet,
- *   confidence chip (High/Medium), "heard: ..." excerpt, and Show / Preview / Pin / Dismiss buttons.
- * - Shortcuts (SG-7):
- *   - Alt+1..5 -> Show card N
- *   - Shift+Alt+1..5 -> Preview card N
- *   - Alt+D -> Dismiss top card
- * - Passes every Show/Preview action through `dispatchOperatorSuggestionAction` so no code path
- *   can ever display a suggestion without an explicit operator gesture (SG-3).
- */
+export function resolveScriptureSuggestion(
+  suggestion: Suggestion,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bibles: any[],
+  activeBibleId?: string,
+  defaultVersionId?: string
+): ResolvedSuggestionView {
+  return resolveSuggestionView(suggestion, {
+    bibles,
+    activeBibleId,
+    defaultVersionId,
+  });
+}
+
+const REASON_LABELS: Record<string, string> = {
+  'spoken-reference': 'Spoken Ref',
+  'quote-match': 'Verse Quote',
+  'title-mention': 'Song Title',
+  'lyric-match': 'Song Lyric',
+  'intent-trigger': 'Service Cue',
+  'service-context': 'Service Context',
+};
+
 export function SuggestionTray({
   filterKind,
-  bibles,
+  bibles = [],
   activeBibleId,
+  songs = [],
+  savedTexts = [],
   onOperatorShow,
   onOperatorPreview,
 }: SuggestionTrayProps) {
@@ -163,41 +220,25 @@ export function SuggestionTray({
     ) => {
       dispatchOperatorSuggestionAction(action, suggestion, gestureEvent, {
         onShow: (sug) => {
-          const resolved = resolveScriptureSuggestion(
-            sug,
+          const resolved = resolveSuggestionView(sug, {
             bibles,
             activeBibleId,
-            settings.defaultVersionId
-          );
-          onOperatorShow({
-            kind: sug.kind,
-            title: resolved.title,
-            subtitle: resolved.subtitle,
-            body: resolved.body,
-            ref: resolved.ref,
-            book: resolved.book,
-            chapter: resolved.chapter,
-            verse: resolved.verse,
+            defaultVersionId: settings.defaultVersionId,
+            songs,
+            savedTexts,
           });
+          onOperatorShow(resolved);
           markSuggestionActed(sug.id);
         },
         onPreview: (sug) => {
-          const resolved = resolveScriptureSuggestion(
-            sug,
+          const resolved = resolveSuggestionView(sug, {
             bibles,
             activeBibleId,
-            settings.defaultVersionId
-          );
-          onOperatorPreview({
-            kind: sug.kind,
-            title: resolved.title,
-            subtitle: resolved.subtitle,
-            body: resolved.body,
-            ref: resolved.ref,
-            book: resolved.book,
-            chapter: resolved.chapter,
-            verse: resolved.verse,
+            defaultVersionId: settings.defaultVersionId,
+            songs,
+            savedTexts,
           });
+          onOperatorPreview(resolved);
         },
         onDismiss: (id) => {
           markSuggestionActed(id);
@@ -210,7 +251,9 @@ export function SuggestionTray({
       markSuggestionActed,
       onOperatorPreview,
       onOperatorShow,
+      savedTexts,
       settings.defaultVersionId,
+      songs,
     ]
   );
 
@@ -222,7 +265,6 @@ export function SuggestionTray({
       if (isEditableElementFocused(e.target)) return;
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
 
-      // Alt+D: dismiss top card
       if (!e.shiftKey && e.key.toLowerCase() === 'd') {
         const top = visibleSuggestions[0];
         if (!top) return;
@@ -237,7 +279,6 @@ export function SuggestionTray({
         return;
       }
 
-      // Digit 1..5 (check e.code Digit1..Digit5 so Shift+Alt+1 works even when e.key is '!')
       const codeMatch = (e.code || '').match(/^Digit([1-5])$/);
       const keyMatch = (e.key || '').match(/^[1-5]$/);
       const idxStr = codeMatch ? codeMatch[1] : keyMatch ? keyMatch[0] : null;
@@ -284,7 +325,9 @@ export function SuggestionTray({
               className={`chip ${
                 activeAsrMode === 'whisper'
                   ? 'ok'
-                  : activeAsrMode === 'browser-bridge' || activeAsrMode === 'loading-whisper'
+                  : activeAsrMode === 'browser-bridge' ||
+                      activeAsrMode === 'browser-fallback' ||
+                      activeAsrMode === 'loading-whisper'
                     ? 'warn'
                     : ''
               }`}
@@ -296,11 +339,13 @@ export function SuggestionTray({
                   ? 'Preparing voice model…'
                   : activeAsrMode === 'browser-bridge'
                     ? 'Temporary voice engine (download Whisper in Library)'
-                    : activeAsrMode === 'browser-backup'
-                      ? activeEngineDetail || 'Browser backup engine'
-                      : isListening && !isPaused
-                        ? 'Listening'
-                        : 'Voice paused'}
+                    : activeAsrMode === 'browser-fallback'
+                      ? 'Browser fallback engine'
+                      : activeAsrMode === 'browser-backup'
+                        ? activeEngineDetail || 'Browser backup engine'
+                        : isListening && !isPaused
+                          ? 'Listening'
+                          : 'Voice paused'}
             </span>
           )}
         </div>
@@ -317,7 +362,11 @@ export function SuggestionTray({
             </button>
           )}
           {activeAsrMode === 'awaiting-model' && (
-            <Link href="/app/library?tab=voice" className="btn btn-secondary btn-sm" style={{ minHeight: 26, padding: '2px 10px', fontSize: 11 }}>
+            <Link
+              href="/app/library?tab=voice"
+              className="btn btn-secondary btn-sm"
+              style={{ minHeight: 26, padding: '2px 10px', fontSize: 11 }}
+            >
               <Icon name="download" size={12} /> Download Whisper model
             </Link>
           )}
@@ -328,40 +377,46 @@ export function SuggestionTray({
         </div>
       </div>
 
-      {(activeAsrMode === 'browser-bridge' || activeAsrMode === 'browser-fallback' || showRetryWhisper) && engineNotice && (
-        <div className="banner warn" style={{ fontSize: 12, padding: '6px 10px' }}>
-          <Icon name="alert" size={15} />
-          <span className="grow">{engineNotice}</span>
-          {showRetryWhisper && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              style={{ minHeight: 26, padding: '2px 10px', fontSize: 11 }}
-              onClick={() => retryWhisperEngine()}
-            >
-              <Icon name="refresh" size={12} /> Retry Whisper
-            </button>
-          )}
-        </div>
-      )}
+      {(activeAsrMode === 'browser-bridge' || activeAsrMode === 'browser-fallback' || showRetryWhisper) &&
+        engineNotice && (
+          <div className="banner warn" style={{ fontSize: 12, padding: '6px 10px' }}>
+            <Icon name="alert" size={15} />
+            <span className="grow">{engineNotice}</span>
+            {showRetryWhisper && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ minHeight: 26, padding: '2px 10px', fontSize: 11 }}
+                onClick={() => retryWhisperEngine()}
+              >
+                <Icon name="refresh" size={12} /> Retry Whisper
+              </button>
+            )}
+          </div>
+        )}
 
       {visibleSuggestions.length === 0 ? (
         <div className="muted" style={{ fontSize: 12 }}>
           {activeAsrMode === 'awaiting-model'
             ? activeEngineDetail
             : isListening && !isPaused
-              ? 'No active voice suggestions yet. When the pastor names a Scripture (e.g. "Turn to Psalm 32" or "Romans 8:28"), it appears here for one-click Show or Preview.'
+              ? filterKind === 'song'
+                ? 'Listening for song titles ("Let\'s sing Amazing Grace") or consecutive lyric lines…'
+                : filterKind === 'text'
+                  ? 'Listening for service cues ("offering time", "welcome to church", "let us pray")…'
+                  : 'Listening for spoken Scriptures ("Turn to Psalm 32"), verse quotes, songs, and service cues…'
               : 'Voice listening is paused. Press Alt+L to resume listening.'}
         </div>
       ) : (
         <div className="col" style={{ gap: 8 }}>
           {visibleSuggestions.map((sug, idx) => {
-            const resolved = resolveScriptureSuggestion(
-              sug,
+            const resolved = resolveSuggestionView(sug, {
               bibles,
               activeBibleId,
-              settings.defaultVersionId
-            );
+              defaultVersionId: settings.defaultVersionId,
+              songs,
+              savedTexts,
+            });
             const shortcutNum = idx + 1;
 
             return (
@@ -384,12 +439,18 @@ export function SuggestionTray({
                       size={15}
                       className="gold"
                     />
-                    <b style={{ fontSize: 14 }}>{resolved.title}</b>
+                    <b style={{ fontSize: 14 }}>
+                      {resolved.title}
+                      {resolved.label ? ` · ${resolved.label}` : ''}
+                    </b>
                     {resolved.subtitle && (
                       <span className="chip" style={{ fontSize: 11 }}>
                         {resolved.subtitle}
                       </span>
                     )}
+                    <span className="chip" style={{ fontSize: 10 }}>
+                      {REASON_LABELS[sug.reason] || sug.reason}
+                    </span>
                     <span
                       className={`chip ${sug.band === 'high' ? 'ok' : 'warn'}`}
                       style={{ fontSize: 11 }}
@@ -468,6 +529,7 @@ export function SuggestionTray({
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
+                    whiteSpace: 'pre-line',
                   }}
                 >
                   {resolved.body}

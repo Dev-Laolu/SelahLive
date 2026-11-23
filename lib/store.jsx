@@ -883,6 +883,23 @@ export function AppProvider({ children }) {
         hide();
       } else if (d.type === "selah:dock-step") {
         window.dispatchEvent(new CustomEvent("selah-dock-step", { detail: d.dir }));
+      } else if (d.type === "selah:suggest-action") {
+        // Explicit operator click inside OBS Dock suggestion strip (SG-8, PRD §7)
+        window.dispatchEvent(
+          new CustomEvent("selah-dock-suggest-action", {
+            detail: {
+              action: d.action,
+              suggestionId: d.suggestionId,
+              item: d.item || null,
+            },
+          })
+        );
+        if (d.action === "show" && d.item) {
+          if (liveRef.current) takeLive(d.item);
+          else show(d.item);
+        } else if (d.action === "preview" && d.item) {
+          window.dispatchEvent(new CustomEvent("selah-dock-select", { detail: d.item }));
+        }
       }
     };
 
@@ -1031,7 +1048,17 @@ export function AppProvider({ children }) {
   };
   return (
     <Ctx.Provider value={value}>
-      <VoiceProvider>{children}</VoiceProvider>
+      <VoiceProvider
+        bibles={value.bibles}
+        activeBibleId={activeBibleId}
+        songPacks={value.songPacks}
+        customSongs={customSongs}
+        savedTexts={value.savedTexts}
+        lyricsLinesPerSlide={lyricsLinesPerSlide}
+        emit={emit}
+      >
+        {children}
+      </VoiceProvider>
     </Ctx.Provider>
   );
 }

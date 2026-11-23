@@ -18,6 +18,7 @@ export default function Dock() {
   const [themes, setThemes] = useState([]);
   const [recent, setRecent] = useState([]);
   const [savedTexts, setSavedTexts] = useState([]);
+  const [voiceSuggestions, setVoiceSuggestions] = useState([]);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickBody, setQuickBody] = useState("");
   const [showHelp, setShowHelp] = useState(false);
@@ -80,6 +81,10 @@ export default function Dock() {
           setSearchTimeout(false);
           setResults(d.results || []);
           if (d.results?.length) setSelected(d.results[0]);
+        }
+      } else if (d.type === "selah:suggest") {
+        if (Array.isArray(d.suggestions)) {
+          setVoiceSuggestions(d.suggestions.slice(0, 3));
         }
       }
     };
@@ -280,6 +285,79 @@ export default function Dock() {
       {/* Main Body: switches to 2-column grid when docked horizontally at the bottom of OBS */}
       <div className="dock-body">
         <div className="dock-scroll">
+          {/* SG-8: Compact Voice Suggestion Strip (top 3) inside OBS Dock */}
+          {voiceSuggestions.length > 0 && (
+            <div className="card raised col" style={{ gap: 5, padding: 7, borderColor: "var(--gold)" }}>
+              <div className="row between">
+                <span className="row" style={{ gap: 5, fontSize: 11 }}>
+                  <Icon name="sparkle" size={13} className="gold" />
+                  <b className="gold">Voice Suggestions</b>
+                </span>
+                <span className="muted" style={{ fontSize: 10 }}>Click Show to display</span>
+              </div>
+              {voiceSuggestions.map((sug) => (
+                <div
+                  key={sug.id}
+                  className="row between"
+                  style={{
+                    gap: 6,
+                    padding: "4px 6px",
+                    borderRadius: 6,
+                    background: "var(--bg)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="row" style={{ gap: 4 }}>
+                      <b style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {sug.item?.title || "Suggestion"}
+                      </b>
+                      <span className={`chip ${sug.band === "high" ? "ok" : "warn"}`} style={{ fontSize: 9, padding: "0 4px" }}>
+                        {Math.round((sug.confidence || 0.8) * 100)}%
+                      </span>
+                    </div>
+                    <div className="muted" style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {sug.item?.body || sug.heard || ""}
+                    </div>
+                  </div>
+                  <div className="row" style={{ gap: 4, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      style={{ minHeight: 24, padding: "2px 8px", fontSize: 10 }}
+                      onClick={() => {
+                        if (sug.item) setSelected(sug.item);
+                        sendMsg("selah:suggest-action", {
+                          action: "show",
+                          suggestionId: sug.id,
+                          item: sug.item,
+                        });
+                        setVoiceSuggestions((list) => list.filter((x) => x.id !== sug.id));
+                      }}
+                    >
+                      Show
+                    </button>
+                    <button
+                      type="button"
+                      className="iconbtn"
+                      style={{ width: 22, height: 22 }}
+                      aria-label="Dismiss suggestion"
+                      onClick={() => {
+                        sendMsg("selah:suggest-action", {
+                          action: "dismiss",
+                          suggestionId: sug.id,
+                        });
+                        setVoiceSuggestions((list) => list.filter((x) => x.id !== sug.id));
+                      }}
+                    >
+                      <Icon name="x" size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Quick Text Push Live Composer inside OBS Dock (v1.2.1) */}
           {scope === "text" && (
             <form className="card raised col" style={{ gap: 5, padding: 7 }} onSubmit={pushQuickText}>

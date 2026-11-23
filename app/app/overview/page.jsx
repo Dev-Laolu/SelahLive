@@ -31,7 +31,8 @@ export default function OverviewPage() {
     activeBibleId, live, show, updateLive, takeLive, hide, stepLive,
     lyricsLinesPerSlide, bumpSongUse, bumpTextUse, syncNotice, addRecent,
   } = useApp();
-  const { settings: voiceSettings } = useVoice();
+  const { settings: voiceSettings, serviceContext, addServiceContextItem, removeServiceContextItem, clearServiceContext } = useVoice();
+  const [svcInput, setSvcInput] = useState("");
 
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all"); // all | scripture | songs | text
@@ -244,17 +245,79 @@ export default function OverviewPage() {
         <SuggestionTray
           bibles={bibles}
           activeBibleId={pack?.id}
+          songs={allSongs}
+          savedTexts={savedTexts}
           onOperatorShow={(sugItem) => {
             setPending(sugItem);
             if (live) takeLive(sugItem);
             else show(sugItem);
             if (sugItem.ref) addRecent(sugItem.ref);
+            if (sugItem.songId) bumpSongUse(sugItem.songId);
+            if (sugItem.savedTextId) bumpTextUse(sugItem.savedTextId);
           }}
           onOperatorPreview={(sugItem) => {
             setPending(sugItem);
           }}
         />
         {voiceSettings.showTranscript && <TranscriptPanel defaultOpen={true} />}
+
+        {/* MD-7: Service Context (optional preload list for today's expected verses, songs & texts) */}
+        {voiceSettings.enabled && (
+          <div className="card col" style={{ gap: 8, padding: 12 }}>
+            <div className="row between wrap" style={{ gap: 8 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <Icon name="pin" size={15} className="gold" />
+                <b style={{ fontSize: 13 }}>Today&apos;s Service Context (Voice Confidence Boost)</b>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  Preload expected verses, songs, or slides so they rank first when spoken.
+                </span>
+              </div>
+              {serviceContext.length > 0 && (
+                <button type="button" className="btn btn-ghost btn-sm" style={{ minHeight: 26, padding: "2px 8px", fontSize: 11 }} onClick={() => clearServiceContext()}>
+                  Clear list
+                </button>
+              )}
+            </div>
+            <form
+              className="row wrap"
+              style={{ gap: 8 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!svcInput.trim()) return;
+                addServiceContextItem(svcInput.trim());
+                setSvcInput("");
+              }}
+            >
+              <input
+                className="input grow"
+                style={{ height: 34, fontSize: 13 }}
+                maxLength={80}
+                value={svcInput}
+                onChange={(e) => setSvcInput(e.target.value)}
+                placeholder='Add expected verse, song, or slide (e.g. "Romans 8:28", "Amazing Grace", "Offering today")…'
+              />
+              <button type="submit" className="btn btn-secondary btn-sm" disabled={!svcInput.trim()}>
+                <Icon name="plus" size={14} /> Add to Service Context
+              </button>
+            </form>
+            {serviceContext.length > 0 && (
+              <div className="row wrap" style={{ gap: 6 }}>
+                {serviceContext.map((itemLabel) => (
+                  <span key={itemLabel} className="chip gold" style={{ fontSize: 12 }}>
+                    {itemLabel}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${itemLabel} from service context`}
+                      onClick={() => removeServiceContextItem(itemLabel)}
+                    >
+                      <Icon name="x" size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Live now card (V1.2 §1) */}
         <div className="card raised col" style={{ gap: 10 }}>

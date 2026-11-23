@@ -59,7 +59,7 @@ export function VoiceModelsTab() {
         </div>
         <p className="muted" style={{ margin: 0, fontSize: 13 }}>
           Download a voice model once while online. After downloading, Selah Live transcribes the pastor&apos;s microphone{' '}
-          <b>entirely offline on this computer</b> (using WebGPU or WASM inside a background Web Worker) and suggests Scriptures without ever sending audio to the internet.
+          <b>entirely offline on this computer</b> and suggests Scriptures without ever sending audio to the internet.
         </p>
         <div className="row between wrap" style={{ gap: 8, marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)', fontSize: 12 }}>
           <div>
@@ -130,7 +130,7 @@ export function VoiceModelsTab() {
                 </div>
 
                 <span className="muted mono" title={sizeInfo?.isExact ? 'Exact size from Hugging Face Hub' : 'Estimated quantised download size'}>
-                  { sizeInfo?.isExact ? '' : '~' }{formatBytes(displayBytes)}
+                  {sizeInfo?.isExact ? '' : '~'}{formatBytes(displayBytes)}
                 </span>
 
                 <span className="muted mono">{m.recommendedRamGb} GB+ RAM</span>

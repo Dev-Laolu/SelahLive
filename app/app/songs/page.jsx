@@ -8,6 +8,7 @@ import { useApp } from "@/lib/store";
 import { parseSong } from "@/lib/songs";
 import { highlightSegments } from "@/lib/search";
 import { useToast } from "@/components/Toast";
+import { SuggestionTray } from "@/src/voice/ui/SuggestionTray";
 
 function rechunkSections(sections = [], maxLines = 2) {
   const out = [];
@@ -255,6 +256,32 @@ export default function SongsPage() {
           </button>
         </div>
       </div>
+
+      {/* SG-8: Voice suggestions for songs (title mentions & consecutive lyric matches) */}
+      <SuggestionTray
+        filterKind="song"
+        songs={songs}
+        onOperatorShow={(sugItem) => {
+          if (sugItem.songId) {
+            setSongId(sugItem.songId);
+            setSlide(sugItem.slideIndex ?? 0);
+            bumpSongUse(sugItem.songId);
+          }
+          const payload = {
+            ...sugItem,
+            templateId: (sugItem.songId && songThemeOverrides[sugItem.songId]) || "",
+          };
+          if (live) takeLive(payload);
+          else show(payload);
+        }}
+        onOperatorPreview={(sugItem) => {
+          if (sugItem.songId) {
+            const target = songs.find((s) => s.id === sugItem.songId);
+            setSongId(sugItem.songId);
+            selectSlide(sugItem.slideIndex ?? 0, target);
+          }
+        }}
+      />
 
       {songs.length === 0 ? (
         <div className="empty">

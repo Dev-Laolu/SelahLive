@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -17,6 +18,7 @@ import {
   type MicTestReport,
   type Suggestion,
   type TranscriptSegment,
+  type TriggerRule,
   type VoiceSettings,
 } from './types';
 import {
@@ -54,9 +56,19 @@ import {
   type HardwareProfile,
   type SpeedCheckResult,
 } from './asr/engineManager';
-import { parseSpokenReferences } from './detectors/spokenReferenceParser';
+import {
+  applyServiceContextBoost,
+  matchIntentTriggers,
+  matchSpokenSongs,
+  matchSpokenVerseQuotes,
+  parseSpokenReferences,
+  type BiblePackForQuotes,
+  type SavedTextForTrigger,
+  type SongForVoiceMatch,
+} from './detectors';
 import { SuggestionEngine } from './suggestions/suggestionEngine';
 import { sanitizeTranscriptText } from './suggestions/safety';
+import { resolveSuggestionView } from './ui/SuggestionTray';
 
 export type ActiveAsrMode =
   | 'idle'
@@ -117,6 +129,15 @@ export interface VoiceContextValue {
   markSuggestionActed: (id: string) => void;
   togglePinSuggestion: (id: string) => void;
   ingestTranscriptText: (text: string, isFinal?: boolean) => void;
+
+  // Phase 3 — Trigger Rules (MD-6) & Service Context (MD-7)
+  triggerRules: TriggerRule[];
+  saveTriggerRule: (rule: Omit<TriggerRule, 'id'> & { id?: string }) => Promise<TriggerRule>;
+  deleteTriggerRule: (id: string) => Promise<void>;
+  serviceContext: string[];
+  addServiceContextItem: (label: string) => Promise<void>;
+  removeServiceContextItem: (label: string) => Promise<void>;
+  clearServiceContext: () => Promise<void>;
 }
 
 const VoiceCtx = createContext<VoiceContextValue | null>(null);
@@ -189,7 +210,52 @@ async function detectHardwareProfile(): Promise<HardwareProfile> {
   };
 }
 
-export function VoiceProvider({ children }: { children: React.ReactNode }) {
+function rechunkSongSections(
+  sections: Array<{ label?: string; text?: string }> = [],
+  maxLines = 2
+): Array<{ label: string; text: string }> {
+  const out: Array<{ label: string; text: string }> = [];
+  for (const sec of sections) {
+    const lines = String(sec?.text || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (let i = 0; i < lines.length; i += maxLines) {
+      out.push({
+        label: sec?.label || '',
+        text: lines.slice(i, i + maxLines).join('\n'),
+      });
+    }
+  }
+  return out;
+}
+
+export interface VoiceProviderProps {
+  children: React.ReactNode;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bibles?: any[];
+  activeBibleId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  songPacks?: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  customSongs?: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  savedTexts?: any[];
+  lyricsLinesPerSlide?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  emit?: (type: string, payload?: Record<string, any>) => void;
+}
+
+export function VoiceProvider({
+  children,
+  bibles = [],
+  activeBibleId = '',
+  songPacks = [],
+  customSongs = [],
+  savedTexts = [],
+  lyricsLinesPerSlide = 2,
+  emit,
+}: VoiceProviderProps) {
   const [settings, setSettings] = useState<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   const [devices, setDevices] = useState<AudioInputDevice[]>([]);
   const [permissionState, setPermissionState] = useState<MicPermissionState>('unrequested');
@@ -232,10 +298,44 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
 
+  // Phase 3 state: Trigger Rules (MD-6) & Service Context (MD-7)
+  const [triggerRules, setTriggerRules] = useState<TriggerRule[]>([]);
+  const [serviceContext, setServiceContext] = useState<string[]>([]);
+
+  const allSongsNormalized: SongForVoiceMatch[] = useMemo(() => {
+    const out: SongForVoiceMatch[] = [];
+    for (const s of customSongs) {
+      out.push({
+        id: s.id,
+        title: s.title,
+        author: s.author || '',
+        sections: rechunkSongSections(s.sections, lyricsLinesPerSlide),
+      });
+    }
+    for (const p of songPacks) {
+      for (const s of p.songs || []) {
+        out.push({
+          id: `${p.id}:${s.id || s.title}`,
+          title: s.title,
+          author: s.author || '',
+          sections: rechunkSongSections(s.sections, lyricsLinesPerSlide),
+        });
+      }
+    }
+    return out;
+  }, [customSongs, songPacks, lyricsLinesPerSlide]);
+
   const settingsRef = useRef<VoiceSettings>(DEFAULT_VOICE_SETTINGS);
   const installedModelsRef = useRef<Record<WhisperModelId, InstalledVoiceModelRecord>>(
     {} as Record<WhisperModelId, InstalledVoiceModelRecord>
   );
+  const biblesRef = useRef<BiblePackForQuotes[]>(bibles);
+  const activeBibleIdRef = useRef<string>(activeBibleId);
+  const songsRef = useRef<SongForVoiceMatch[]>(allSongsNormalized);
+  const savedTextsRef = useRef<SavedTextForTrigger[]>(savedTexts);
+  const triggerRulesRef = useRef<TriggerRule[]>([]);
+  const serviceContextRef = useRef<string[]>([]);
+
   const whisperFailedModelsRef = useRef<Set<WhisperModelId>>(new Set());
   const whisperSlowModelsRef = useRef<Set<WhisperModelId>>(new Set());
   const rtfMonitorRef = useRef<RtfMonitor>(new RtfMonitor());
@@ -251,17 +351,15 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const isTestingRef = useRef<boolean>(false);
   const startAsrRef = useRef<((cfg: VoiceSettings) => Promise<void>) | null>(null);
 
-  useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
-
-  useEffect(() => {
-    installedModelsRef.current = installedModels;
-  }, [installedModels]);
-
-  useEffect(() => {
-    hardwareProfileRef.current = hardwareProfile;
-  }, [hardwareProfile]);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { installedModelsRef.current = installedModels; }, [installedModels]);
+  useEffect(() => { hardwareProfileRef.current = hardwareProfile; }, [hardwareProfile]);
+  useEffect(() => { biblesRef.current = bibles; }, [bibles]);
+  useEffect(() => { activeBibleIdRef.current = activeBibleId; }, [activeBibleId]);
+  useEffect(() => { songsRef.current = allSongsNormalized; }, [allSongsNormalized]);
+  useEffect(() => { savedTextsRef.current = savedTexts; }, [savedTexts]);
+  useEffect(() => { triggerRulesRef.current = triggerRules; }, [triggerRules]);
+  useEffect(() => { serviceContextRef.current = serviceContext; }, [serviceContext]);
 
   const refreshDevices = useCallback(async (): Promise<AudioInputDevice[]> => {
     const list = await listAudioInputDevices();
@@ -269,6 +367,64 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     return list;
   }, []);
 
+  /**
+   * Broadcasts top 3 suggestions to the OBS Dock via `selah:suggest` (SG-8, PRD §7).
+   */
+  const broadcastSuggestionsToDock = useCallback(
+    (activeList: Suggestion[]) => {
+      if (!emit) return;
+      const top3 = activeList.slice(0, 3).map((sug) => {
+        const resolved = resolveSuggestionView(sug, {
+          bibles: biblesRef.current,
+          activeBibleId: activeBibleIdRef.current,
+          defaultVersionId: settingsRef.current.defaultVersionId,
+          songs: songsRef.current,
+          savedTexts: savedTextsRef.current,
+        });
+        return {
+          id: sug.id,
+          kind: sug.kind,
+          reason: sug.reason,
+          band: sug.band,
+          confidence: sug.confidence,
+          heard: sug.heard,
+          item: resolved,
+        };
+      });
+      emit('selah:suggest', { suggestions: top3 });
+    },
+    [emit]
+  );
+
+  // Sync top suggestions to OBS Dock whenever suggestions change
+  useEffect(() => {
+    broadcastSuggestionsToDock(suggestions);
+  }, [suggestions, broadcastSuggestionsToDock]);
+
+  // Listen for dock `selah-dock-suggest-action` events so acted-on cards are removed & put on 2-min cooldown
+  useEffect(() => {
+    const onDockSuggestAction = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      if (detail.suggestionId && (detail.action === 'show' || detail.action === 'dismiss')) {
+        const next = suggestionEngineRef.current.markShownOrDismissed(
+          detail.suggestionId,
+          Date.now()
+        );
+        setSuggestions(next);
+      }
+    };
+    window.addEventListener('selah-dock-suggest-action', onDockSuggestAction);
+    return () => window.removeEventListener('selah-dock-suggest-action', onDockSuggestAction);
+  }, []);
+
+  /**
+   * Runs all 4 parallel detectors on incoming transcript segments (PRD §4):
+   * 1. Spoken Reference Parser (MD-1..MD-3)
+   * 2. Verse Quote Matcher (MD-4)
+   * 3. Song Title & Lyric Matcher (MD-5)
+   * 4. Intent Trigger Matcher (MD-6)
+   * Plus Service Context boost (MD-7).
+   */
   const handleIncomingSegment = useCallback((rawSeg: TranscriptSegment) => {
     const cleanText = sanitizeTranscriptText(rawSeg.text, 360);
     if (!cleanText) return;
@@ -307,6 +463,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     );
     const rollingText = recentWindowSegments.map((t) => t.text).join(' ');
 
+    const cfg = settingsRef.current;
+    const svcCtx = serviceContextRef.current;
+    const defaultVer = cfg.defaultVersionId || activeBibleIdRef.current || '';
+    let anyNewCard = false;
+    let anyChanged = false;
+
+    // 1. Spoken Reference Parser (runs on both interim and final)
     const directRefs = parseSpokenReferences(seg.text);
     const rollingRefs = parseSpokenReferences(rollingText);
     const allRefs = [...directRefs];
@@ -316,25 +479,99 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    if (allRefs.length > 0) {
-      let anyNewCard = false;
-      let anyChanged = false;
-      const cfg = settingsRef.current;
+    for (const ref of allRefs) {
+      const boost = applyServiceContextBoost(ref.canonicalRef, ref.confidence, svcCtx);
+      const res = suggestionEngineRef.current.ingest(
+        {
+          kind: 'scripture',
+          reason: boost.boosted ? 'service-context' : 'spoken-reference',
+          confidence: boost.confidence,
+          band: boost.boosted ? 'high' : ref.band,
+          heard: ref.matchedExcerpt,
+          payload: {
+            book: ref.book,
+            chapter: ref.chapter,
+            verseStart: ref.verseStart,
+            verseEnd: ref.verseEnd,
+            versionId: defaultVer,
+          },
+        },
+        { sensitivity: cfg.sensitivity, now }
+      );
+      if (res.changed) anyChanged = true;
+      if (res.createdNew) anyNewCard = true;
+    }
 
-      for (const ref of allRefs) {
+    // 2. Intent Trigger Matcher (MD-6: offering, welcome, prayer, announcements, custom triggers)
+    const intentMatches = matchIntentTriggers(
+      rollingText,
+      savedTextsRef.current,
+      triggerRulesRef.current
+    );
+    for (const im of intentMatches) {
+      const boost = applyServiceContextBoost(im.title, im.confidence, svcCtx);
+      const res = suggestionEngineRef.current.ingest(
+        {
+          kind: 'text',
+          reason: 'intent-trigger',
+          confidence: boost.confidence,
+          band: 'high',
+          heard: im.matchedPhrase,
+          payload: {
+            savedTextId: im.savedTextId,
+            triggerId: im.triggerId,
+          },
+        },
+        { sensitivity: cfg.sensitivity, now }
+      );
+      if (res.changed) anyChanged = true;
+      if (res.createdNew) anyNewCard = true;
+    }
+
+    // 3. Song Title & Consecutive Lyric Matcher (MD-5)
+    const songMatches = matchSpokenSongs(rollingText, songsRef.current);
+    for (const sm of songMatches) {
+      const boost = applyServiceContextBoost(sm.title, sm.confidence, svcCtx);
+      const res = suggestionEngineRef.current.ingest(
+        {
+          kind: 'song',
+          reason: sm.reason,
+          confidence: boost.confidence,
+          band: boost.boosted ? 'high' : sm.band,
+          heard: sm.matchedLine || sm.heardExcerpt,
+          payload: {
+            songId: sm.songId,
+            slideIndex: sm.slideIndex,
+            matchedLine: sm.matchedLine,
+          },
+        },
+        { sensitivity: cfg.sensitivity, now }
+      );
+      if (res.changed) anyChanged = true;
+      if (res.createdNew) anyNewCard = true;
+    }
+
+    // 4. Verse Quote Matcher (MD-4: when pastor reads a verse aloud; run when no explicit ref in this segment)
+    if (allRefs.length === 0 && (seg.isFinal || rollingText.split(/\s+/).length >= 8)) {
+      const quoteMatches = matchSpokenVerseQuotes(
+        rollingText,
+        biblesRef.current,
+        defaultVer
+      );
+      for (const qm of quoteMatches) {
+        const boost = applyServiceContextBoost(qm.canonicalRef, qm.confidence, svcCtx);
         const res = suggestionEngineRef.current.ingest(
           {
             kind: 'scripture',
-            reason: 'spoken-reference',
-            confidence: ref.confidence,
-            band: ref.band,
-            heard: ref.matchedExcerpt,
+            reason: 'quote-match',
+            confidence: boost.confidence,
+            band: boost.boosted ? 'high' : qm.band,
+            heard: qm.heardExcerpt,
             payload: {
-              book: ref.book,
-              chapter: ref.chapter,
-              verseStart: ref.verseStart,
-              verseEnd: ref.verseEnd,
-              versionId: cfg.defaultVersionId || '',
+              book: qm.book,
+              chapter: qm.chapter,
+              verseStart: qm.verseStart,
+              versionId: qm.versionId || defaultVer,
             },
           },
           { sensitivity: cfg.sensitivity, now }
@@ -342,13 +579,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         if (res.changed) anyChanged = true;
         if (res.createdNew) anyNewCard = true;
       }
+    }
 
-      if (anyChanged) {
-        setSuggestions(suggestionEngineRef.current.getActive(now));
-      }
-      if (anyNewCard && cfg.chime) {
-        playSoftChime();
-      }
+    if (anyChanged) {
+      setSuggestions(suggestionEngineRef.current.getActive(now));
+    }
+    if (anyNewCard && cfg.chime) {
+      playSoftChime();
     }
   }, []);
 
@@ -365,7 +602,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
             metric.audioDurationMs,
             metric.inferenceMs
           );
-          // ST-8.3: If sustained RTF > 1.0 over 3 consecutive utterances, mark model slow and re-run ST-8 selection between utterances
           if (check.isSustainedSlow && metric.modelId) {
             whisperSlowModelsRef.current.add(metric.modelId);
             rtfMonitorRef.current.reset();
@@ -390,7 +626,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
           setActiveEngineDetail(
             `Whisper ${info.modelId} (${info.backend.toUpperCase()})`
           );
-          // ST-8.2 & ST-10: Automatically stop temporary browser bridge between utterances when Whisper is ready
           if (browserEngineRef.current) {
             await browserEngineRef.current.destroy();
             browserEngineRef.current = null;
@@ -416,18 +651,36 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     return workerRef.current;
   }, [handleIncomingSegment]);
 
-  // Boot: load voice settings, installed models, speed check history, hardware profile, and probe HF sizes
+  // Boot: load voice settings, installed models, speed check, trigger rules, service context, and hardware profile
   useEffect(() => {
     (async () => {
-      const [savedVoice, savedModels, savedSpeedCheck, hw] = await Promise.all([
+      const [
+        savedVoice,
+        savedModels,
+        savedSpeedCheck,
+        savedTriggers,
+        savedSvcCtx,
+        hw,
+      ] = await Promise.all([
         getKey('settings', 'voice', null),
         getInstalledVoiceModels(),
         getKey('settings', 'voiceSpeedCheck', null),
+        getKey('settings', 'voiceTriggers', []),
+        getKey('settings', 'voiceServiceContext', []),
         detectHardwareProfile(),
       ]);
 
       setHardwareProfile(hw);
       hardwareProfileRef.current = hw;
+
+      if (Array.isArray(savedTriggers)) {
+        setTriggerRules(savedTriggers);
+        triggerRulesRef.current = savedTriggers;
+      }
+      if (Array.isArray(savedSvcCtx)) {
+        setServiceContext(savedSvcCtx);
+        serviceContextRef.current = savedSvcCtx;
+      }
 
       if (savedSpeedCheck && typeof savedSpeedCheck === 'object') {
         setSpeedCheckResult(savedSpeedCheck as SpeedCheckResult);
@@ -456,7 +709,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
           isPausedRef.current = true;
         }
       } else {
-        // First run: apply hardware-recommended Whisper model ('base.en' default, 'tiny.en' on 4GB weak laptops)
         const initial: VoiceSettings = {
           ...DEFAULT_VOICE_SETTINGS,
           whisperModel: rec.recommendedModel,
@@ -475,7 +727,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refreshDevices]);
 
-  // Periodically prune expired suggestions (SG-4 60s expiry)
+  // Prune expired suggestions every 2 seconds
   useEffect(() => {
     const timer = setInterval(() => {
       if (suggestionEngineRef.current.pruneExpired(Date.now())) {
@@ -485,10 +737,58 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer);
   }, []);
 
-  /**
-   * ST-9 First-run Speed Check: runs a 2.0s synthetic benchmark clip on the loaded Whisper model,
-   * computes Real-Time Factor (`RTF`), recommends `base.en` / `tiny.en` / `small.en`, and persists the result locally.
-   */
+  // Trigger Rules CRUD (MD-6)
+  const saveTriggerRule = useCallback(
+    async (input: Omit<TriggerRule, 'id'> & { id?: string }): Promise<TriggerRule> => {
+      const rule: TriggerRule = {
+        id: input.id || `trg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        savedTextId: input.savedTextId,
+        phrases: (input.phrases || []).map((p) => String(p).trim()).filter(Boolean),
+        enabled: input.enabled !== false,
+      };
+      const prev = triggerRulesRef.current;
+      const idx = prev.findIndex((r) => r.id === rule.id);
+      const next = idx >= 0 ? prev.map((r, i) => (i === idx ? rule : r)) : [...prev, rule];
+      setTriggerRules(next);
+      triggerRulesRef.current = next;
+      await setKey('settings', 'voiceTriggers', next);
+      return rule;
+    },
+    []
+  );
+
+  const deleteTriggerRule = useCallback(async (id: string) => {
+    const next = triggerRulesRef.current.filter((r) => r.id !== id);
+    setTriggerRules(next);
+    triggerRulesRef.current = next;
+    await setKey('settings', 'voiceTriggers', next);
+  }, []);
+
+  // Service Context CRUD (MD-7)
+  const addServiceContextItem = useCallback(async (label: string) => {
+    const clean = String(label || '').trim();
+    if (!clean) return;
+    const prev = serviceContextRef.current;
+    if (prev.some((x) => x.toLowerCase() === clean.toLowerCase())) return;
+    const next = [...prev, clean].slice(0, 40);
+    setServiceContext(next);
+    serviceContextRef.current = next;
+    await setKey('settings', 'voiceServiceContext', next);
+  }, []);
+
+  const removeServiceContextItem = useCallback(async (label: string) => {
+    const next = serviceContextRef.current.filter((x) => x !== label);
+    setServiceContext(next);
+    serviceContextRef.current = next;
+    await setKey('settings', 'voiceServiceContext', next);
+  }, []);
+
+  const clearServiceContext = useCallback(async () => {
+    setServiceContext([]);
+    serviceContextRef.current = [];
+    await setKey('settings', 'voiceServiceContext', []);
+  }, []);
+
   const runFirstRunSpeedCheck = useCallback(
     async (modelId?: WhisperModelId): Promise<SpeedCheckResult | null> => {
       const targetModel: WhisperModelId =
@@ -516,7 +816,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         setLastRtf(bench.rtf);
         await setKey('settings', 'voiceSpeedCheck', result);
 
-        // If the speed check on base.en came back slow (> 0.9 RTF), auto-select tiny.en (per owner instruction)
         if (
           bench.modelId === 'base.en' &&
           bench.rtf > 0.9 &&
@@ -541,11 +840,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     [ensureWorker]
   );
 
-  /**
-   * ST-8 Auto Engine Selection execution:
-   * Evaluates `selectActiveAsrEngine` and seamlessly activates Whisper or Browser bridge/fallback
-   * without clearing suggestions or interrupting live output (ST-10).
-   */
   const startAsrForSettings = useCallback(
     async (cfg: VoiceSettings) => {
       const client = ensureWorker();
@@ -581,7 +875,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
           return;
         } catch {
           whisperFailedModelsRef.current.add(targetModel);
-          // Re-evaluate fallback immediately
           const retryDecision = selectActiveAsrEngine({
             preferredEngine: cfg.engine,
             preferredWhisperModel: cfg.whisperModel || 'base.en',
@@ -629,7 +922,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // targetEngine === 'none'
       if (browserEngineRef.current) {
         await browserEngineRef.current.destroy();
         browserEngineRef.current = null;
@@ -646,7 +938,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     startAsrRef.current = startAsrForSettings;
   }, [startAsrForSettings]);
 
-  // Explicit model download triggered by user in Library -> Voice models (ST-4, ST-8.2, ST-9)
   const downloadVoiceModel = useCallback(
     async (modelId: WhisperModelId): Promise<boolean> => {
       setModelError('');
@@ -671,13 +962,11 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         whisperFailedModelsRef.current.delete(modelId);
         whisperSlowModelsRef.current.delete(modelId);
 
-        // ST-9: On first model download, run the quick speed check benchmark automatically
         const existingSpeedCheck = await getKey('settings', 'voiceSpeedCheck', null);
         if (!existingSpeedCheck) {
           await runFirstRunSpeedCheck(modelId);
         }
 
-        // ST-8.2 & ST-10: If voice is currently listening on the temporary browser bridge, switch to Whisper automatically between utterances!
         if (isListeningRef.current && !isPausedRef.current) {
           await startAsrForSettings(settingsRef.current);
         }
@@ -707,9 +996,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     [startAsrForSettings]
   );
 
-  /**
-   * ST-8.3 Retry Whisper button: clears slow/failed flags, resets RTF monitor, and switches back to Whisper seamlessly (ST-10).
-   */
   const retryWhisperEngine = useCallback(async () => {
     whisperFailedModelsRef.current.clear();
     whisperSlowModelsRef.current.clear();
@@ -885,7 +1171,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         workerRef.current?.setPerformanceMode(Boolean(next.performanceMode));
       }
 
-      // If user explicitly changed whisperModel or engine, clear slow/failed flags for that model
       if (patch.whisperModel !== undefined || patch.engine !== undefined) {
         whisperFailedModelsRef.current.clear();
         whisperSlowModelsRef.current.clear();
@@ -896,7 +1181,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
       settingsRef.current = next;
       await setKey('settings', 'voice', next);
 
-      // ST-10: Seamless engine or model switch without clearing suggestions or interrupting live output
       if (
         (patch.engine !== undefined ||
           patch.whisperModel !== undefined ||
@@ -1161,6 +1445,13 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     markSuggestionActed,
     togglePinSuggestion,
     ingestTranscriptText,
+    triggerRules,
+    saveTriggerRule,
+    deleteTriggerRule,
+    serviceContext,
+    addServiceContextItem,
+    removeServiceContextItem,
+    clearServiceContext,
   };
 
   return <VoiceCtx.Provider value={value}>{children}</VoiceCtx.Provider>;

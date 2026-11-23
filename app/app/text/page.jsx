@@ -5,6 +5,7 @@ import Icon from "@/components/Icon";
 import Select from "@/components/Select";
 import { useApp } from "@/lib/store";
 import { useToast } from "@/components/Toast";
+import { SuggestionTray } from "@/src/voice/ui/SuggestionTray";
 
 export default function TextPage() {
   const {
@@ -219,6 +220,25 @@ export default function TextPage() {
         </div>
         <button className="btn btn-primary btn-sm" onClick={startNew}><Icon name="plus" size={15} />Create New Text</button>
       </div>
+
+      {/* SG-8: Voice suggestions for Saved Texts (intent triggers like "offering time", "welcome", "prayer") */}
+      <SuggestionTray
+        filterKind="text"
+        savedTexts={savedTexts}
+        onOperatorShow={(sugItem) => {
+          const found = savedTexts.find((t) => t.id === sugItem.savedTextId);
+          if (found) {
+            openSaved(found);
+            bumpTextUse(found.id);
+          }
+          if (live) takeLive(sugItem);
+          else show(sugItem);
+        }}
+        onOperatorPreview={(sugItem) => {
+          const found = savedTexts.find((t) => t.id === sugItem.savedTextId);
+          if (found) openSaved(found);
+        }}
+      />
 
       <div className="two" style={{ gridTemplateColumns: "290px 1fr", alignItems: "start" }}>
         {/* Left: Saved Texts library with Favourites pinned on top */}
