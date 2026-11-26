@@ -1,14 +1,21 @@
 {
   "name": "selah-live",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.strict.json --noEmit",
+    "lint": "node scripts/check-standards.mjs",
+    "format:check": "node scripts/check-format.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:dummy-data": "node scripts/check-dummy-data.mjs",
+    "test:smoke": "node scripts/test-core-smoke.mjs",
     "test:voice": "node scripts/test-voice-phase0.mjs && node scripts/test-voice-phase1.mjs && node scripts/test-voice-phase2.mjs && node scripts/test-voice-phase3.mjs && node --expose-gc scripts/test-voice-phase4.mjs",
     "test:voice:harness": "node --expose-gc scripts/test-voice-phase4.mjs",
+    "test": "npm run test:smoke && npm run test:voice",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run check:boundaries && npm run check:dummy-data && npm run test",
     "admin:hash-password": "node scripts/admin-hash-password.mjs",
     "admin:setup-mfa": "node scripts/admin-setup-mfa.mjs"
   },
