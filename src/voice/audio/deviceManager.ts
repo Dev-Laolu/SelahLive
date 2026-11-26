@@ -1,13 +1,7 @@
-import type { AudioInputDevice, MicPermissionState } from '../types';
+import type { AudioInputDevice, NoiseSuppressionOption } from '../type';
+import type { PermissionErrorMapping } from './type';
 
-/**
- * Heuristic check whether a device label looks like a USB audio interface,
- * mixer feed, capture device, or external line-in rather than a built-in laptop mic.
- *
- * Used only as the default for noiseSuppression ('auto' -> off for interfaces, on for built-in mics).
- * The user can always override noiseSuppression in Settings -> Voice.
- */
-const INTERFACE_PATTERNS = [
+const INTERFACE_PATTERNS: readonly RegExp[] = [
   /\busb\b/i,
   /\bscarlett\b/i,
   /\bfocusrite\b/i,
@@ -20,7 +14,7 @@ const INTERFACE_PATTERNS = [
   /\bcodec\b|\bexternal\b/i,
 ];
 
-const BUILTIN_PATTERNS = [
+const BUILTIN_PATTERNS: readonly RegExp[] = [
   /\binternal\b/i,
   /\bbuilt[-\s]?in\b/i,
   /\barray\b/i,
@@ -31,7 +25,7 @@ const BUILTIN_PATTERNS = [
 ];
 
 export function isLikelyAudioInterface(label: string): boolean {
-  const clean = String(label || '').trim();
+  const clean = label.trim();
   if (!clean) return false;
   if (INTERFACE_PATTERNS.some((rx) => rx.test(clean))) return true;
   if (BUILTIN_PATTERNS.some((rx) => rx.test(clean))) return false;
@@ -39,46 +33,39 @@ export function isLikelyAudioInterface(label: string): boolean {
 }
 
 export function resolveNoiseSuppression(
-  setting: 'auto' | 'on' | 'off' | undefined,
+  setting: NoiseSuppressionOption | undefined,
   deviceLabel: string
 ): boolean {
   if (setting === 'on') return true;
   if (setting === 'off') return false;
-  // 'auto' (default): OFF for USB interfaces/mixers, ON for built-in mics
   return !isLikelyAudioInterface(deviceLabel);
 }
 
-/**
- * Match a stored device selection against currently enumerated audio inputs.
- * Since browsers can reset `deviceId` after permissions or USB port changes,
- * falls back to matching by `deviceLabel`, then to default/first available device.
- */
 export function resolvePreferredDevice(
   devices: AudioInputDevice[],
   savedDeviceId?: string,
   savedDeviceLabel?: string
 ): AudioInputDevice | null {
-  if (!devices || devices.length === 0) return null;
+  if (devices.length === 0) return null;
 
   if (savedDeviceId) {
     const byId = devices.find((d) => d.deviceId === savedDeviceId);
     if (byId) return byId;
   }
 
-  if (savedDeviceLabel && savedDeviceLabel.trim()) {
-    const norm = savedDeviceLabel.trim().toLowerCase();
-    const byExactLabel = devices.find((d) => d.label.trim().toLowerCase() === norm);
-    if (byExactLabel) return byExactLabel;
+  const trimmedLabel = savedDeviceLabel?.trim().toLowerCase();
+  if (trimmedLabel) {
+    const byExact = devices.find((d) => d.label.trim().toLowerCase() === trimmedLabel);
+    if (byExact) return byExact;
 
-    const byPartialLabel = devices.find(
-      (d) =>
-        d.label.toLowerCase().includes(norm) ||
-        norm.includes(d.label.toLowerCase())
-    );
-    if (byPartialLabel) return byPartialLabel;
+    const byPartial = devices.find((d) => {
+      const candidate = d.label.toLowerCase();
+      return candidate.includes(trimmedLabel) || trimmedLabel.includes(candidate);
+    });
+    if (byPartial) return byPartial;
   }
 
-  return devices.find((d) => d.deviceId === 'default') || devices[0] || null;
+  return devices.find((d) => d.deviceId === 'default') ?? devices[0] ?? null;
 }
 
 export async function listAudioInputDevices(): Promise<AudioInputDevice[]> {
@@ -86,27 +73,25 @@ export async function listAudioInputDevices(): Promise<AudioInputDevice[]> {
     return [];
   }
   try {
-    const raw = await navigator.mediaDevices.enumerateDevices();
-    const inputs = raw.filter((d) => d.kind === 'audioinput');
-    return inputs.map((d, idx) => {
-      const label = d.label || `Microphone ${idx + 1}`;
-      return {
-        deviceId: d.deviceId || `input-${idx}`,
-        label,
-        groupId: d.groupId || '',
-        isLikelyInterface: isLikelyAudioInterface(label),
-      };
-    });
+    const all = await navigator.mediaDevices.enumerateDevices();
+    return all
+      .filter((d) => d.kind === 'audioinput')
+      .map((d, idx) => {
+        const label = d.label || `Microphone ${idx + 1}`;
+        return {
+          deviceId: d.deviceId || `input-${idx}`,
+          label,
+          groupId: d.groupId || '',
+          isLikelyInterface: isLikelyAudioInterface(label),
+        };
+      });
   } catch {
     return [];
   }
 }
 
-export function mapMediaErrorToPermissionState(err: unknown): {
-  state: MicPermissionState;
-  message: string;
-} {
-  const name = (err as { name?: string })?.name || '';
+export function mapMediaErrorToPermissionState(err: unknown): PermissionErrorMapping {
+  const name = (err as { name?: string })?.name ?? '';
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
     return {
       state: 'denied',
@@ -125,7 +110,7 @@ export function mapMediaErrorToPermissionState(err: unknown): {
     return {
       state: 'in-use',
       message:
-        'This audio device is busy or locked by another application (such as OBS in exclusive mode). Disable exclusive mode or use a shared/monitor feed.',
+        'This audio device is busy or locked by another application (such as OBS in exclusive mode). Disable exclusive mode or use a shared feed.',
     };
   }
   return {

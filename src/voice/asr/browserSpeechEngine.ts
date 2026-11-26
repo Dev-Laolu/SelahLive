@@ -1,73 +1,33 @@
-/**
- * Selah Live v2 — Browser SpeechRecognition Backup & First-Run Bridge (ST-2, ST-8)
- *
- * Rules:
- * - Used ONLY as a backup or first-run bridge when Whisper is not downloaded yet
- *   or when the user selects Browser (backup).
- * - Checks for on-device recognition (`processLocally: true`) where supported by Chrome/Edge.
- * - If on-device recognition is not supported by the browser, it ONLY runs if the user has
- *   explicitly opted in to `allowCloudBrowserEngine: true` in Settings -> Voice (ST-2, PRD §8).
- */
-
-import type { TranscriptSegment, VoiceSettings } from '../types';
-import type { AsrEngine, AsrEngineCallbacks } from './engineInterface';
 import { sanitizeTranscriptText } from '../suggestions/safety';
+import type { TranscriptSegment, VoiceSettings } from '../type';
+import type {
+  AsrEngine,
+  AsrEngineCallbacks,
+  SpeechRecognitionEvent,
+  SpeechRecognitionInstance,
+} from './type';
 
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
+type SpeechRecognitionCtor = new () => SpeechRecognitionInstance;
 
-interface SpeechRecognitionResult {
-  isFinal: boolean;
-  length: number;
-  [index: number]: SpeechRecognitionAlternative;
-}
-
-interface SpeechRecognitionEvent {
-  resultIndex: number;
-  results: {
-    length: number;
-    [index: number]: SpeechRecognitionResult;
+function getSpeechRecognitionConstructor(): SpeechRecognitionCtor | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const win = window as Window & {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
   };
-}
-
-interface SpeechRecognitionInstance {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  processLocally?: boolean;
-  onresult: ((ev: SpeechRecognitionEvent) => void) | null;
-  onerror: ((ev: { error?: string; message?: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
+  return win.SpeechRecognition || win.webkitSpeechRecognition;
 }
 
 export function isBrowserSpeechRecognitionSupported(): boolean {
-  if (typeof window === 'undefined') return false;
-  const w = window as unknown as {
-    SpeechRecognition?: unknown;
-    webkitSpeechRecognition?: unknown;
-  };
-  return Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
+  return Boolean(getSpeechRecognitionConstructor());
 }
 
-/**
- * Checks if Chrome's experimental/modern on-device SpeechRecognition (`processLocally`) is available.
- */
 export function supportsProcessLocally(): boolean {
-  if (typeof window === 'undefined') return false;
-  const w = window as unknown as {
-    SpeechRecognition?: { prototype?: { processLocally?: unknown } };
-    webkitSpeechRecognition?: { prototype?: { processLocally?: unknown } };
-  };
-  const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+  const Ctor = getSpeechRecognitionConstructor();
   if (!Ctor) return false;
   try {
-    const inst = new (Ctor as unknown as new () => SpeechRecognitionInstance)();
-    return 'processLocally' in inst;
+    const instance = new Ctor();
+    return 'processLocally' in instance;
   } catch {
     return false;
   }
@@ -85,7 +45,8 @@ export class BrowserSpeechEngine implements AsrEngine {
     await this.destroy();
     this.callbacks = callbacks;
 
-    if (!isBrowserSpeechRecognitionSupported()) {
+    const Ctor = getSpeechRecognitionConstructor();
+    if (!Ctor) {
       callbacks.onStatusChange('error', 'Browser SpeechRecognition is not available in this browser.');
       return;
     }
@@ -99,13 +60,6 @@ export class BrowserSpeechEngine implements AsrEngine {
       return;
     }
 
-    const w = window as unknown as {
-      SpeechRecognition?: new () => SpeechRecognitionInstance;
-      webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
-    };
-    const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
-
     const rec = new Ctor();
     rec.continuous = true;
     rec.interimResults = true;
@@ -116,33 +70,12 @@ export class BrowserSpeechEngine implements AsrEngine {
       } catch {}
     }
 
-    rec.onresult = (ev: SpeechRecognitionEvent) => {
-      if (this.isPaused || !this.callbacks) return;
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        const res = ev.results[i];
-        const alt = res?.[0];
-        if (!alt) continue;
-        const clean = sanitizeTranscriptText(alt.transcript, 360);
-        if (!clean) continue;
-        const now = Date.now();
-        const seg: TranscriptSegment = {
-          id: res.isFinal ? `br-fin-${++this.segCounter}` : `br-int-${this.segCounter + 1}`,
-          text: clean,
-          isFinal: !!res.isFinal,
-          startMs: now - 1200,
-          endMs: now,
-          confidence: typeof alt.confidence === 'number' && alt.confidence > 0 ? alt.confidence : 0.85,
-        };
-        this.callbacks.onSegment(seg);
-      }
-    };
-
+    rec.onresult = (ev: SpeechRecognitionEvent) => this.handleResult(ev);
     rec.onerror = (ev) => {
-      const code = ev?.error || '';
+      const code = ev?.error ?? '';
       if (code === 'no-speech' || code === 'aborted') return;
       this.callbacks?.onError(`Browser speech engine error: ${code || 'unknown'}`);
     };
-
     rec.onend = () => {
       if (this.shouldKeepRunning && !this.isPaused) {
         try {
@@ -157,9 +90,37 @@ export class BrowserSpeechEngine implements AsrEngine {
 
     try {
       rec.start();
-      callbacks.onStatusChange('listening', canRunLocally ? 'Browser (on-device)' : 'Browser (cloud opt-in)');
+      callbacks.onStatusChange(
+        'listening',
+        canRunLocally ? 'Browser (on-device)' : 'Browser (cloud opt-in)'
+      );
     } catch (err) {
-      callbacks.onError((err as { message?: string })?.message || 'Could not start browser speech recognition.');
+      callbacks.onError(
+        (err as { message?: string })?.message || 'Could not start browser speech recognition.'
+      );
+    }
+  }
+
+  private handleResult(ev: SpeechRecognitionEvent): void {
+    if (this.isPaused || !this.callbacks) return;
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const res = ev.results[i];
+      const alt = res?.[0];
+      if (!res || !alt) continue;
+
+      const clean = sanitizeTranscriptText(alt.transcript, 360);
+      if (!clean) continue;
+
+      const now = Date.now();
+      const seg: TranscriptSegment = {
+        id: res.isFinal ? `br-fin-${++this.segCounter}` : `br-int-${this.segCounter + 1}`,
+        text: clean,
+        isFinal: Boolean(res.isFinal),
+        startMs: now - 1200,
+        endMs: now,
+        confidence: alt.confidence > 0 ? alt.confidence : 0.85,
+      };
+      this.callbacks.onSegment(seg);
     }
   }
 
@@ -185,14 +146,14 @@ export class BrowserSpeechEngine implements AsrEngine {
   async destroy(): Promise<void> {
     this.shouldKeepRunning = false;
     this.isPaused = true;
-    if (this.recognition) {
-      try {
-        this.recognition.onresult = null;
-        this.recognition.onerror = null;
-        this.recognition.onend = null;
-        this.recognition.abort();
-      } catch {}
-      this.recognition = null;
-    }
+    if (!this.recognition) return;
+
+    try {
+      this.recognition.onresult = null;
+      this.recognition.onerror = null;
+      this.recognition.onend = null;
+      this.recognition.abort();
+    } catch {}
+    this.recognition = null;
   }
 }

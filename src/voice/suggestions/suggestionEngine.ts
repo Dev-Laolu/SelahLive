@@ -1,61 +1,34 @@
-/**
- * Selah Live v2 — Suggestion Engine (SG-1 through SG-6, PRD §7 & §8)
- *
- * Responsibilities:
- * - Sensitivity thresholds: Careful >= 0.85, Balanced >= 0.70, Eager >= 0.55.
- * - Stable ID generation so interim and final transcripts raising the same reference
- *   merge in place into ONE card without flicker (SG-5).
- * - Cooldown: dismissed or shown items are not re-suggested for 2 minutes (120_000 ms)
- *   unless explicitly forced (SG-4).
- * - Expiry: cards expire after 60 seconds (60_000 ms) unless pinned (SG-4).
- * - Rate-limiting: max 1 new card created per second (1_000 ms) to avoid UI floods (PRD §8).
- * - Maximum 5 cards visible in the tray, ranked by pinned first, then confidence & recency (SG-1).
- */
-
 import type {
-  Reason,
+  ConfidenceBand,
   ScripturePayload,
+  SensitivityLevel,
   SongPayload,
   Suggestion,
   SuggestionKind,
+  SuggestionPayload,
   TextPayload,
-  VoiceSettings,
-} from '../types';
+} from '../type';
 import { sanitizeTranscriptText } from './safety';
+import type { CandidateSuggestionInput, IngestOptions, IngestResult } from './type';
 
-export const SENSITIVITY_THRESHOLDS: Record<VoiceSettings['sensitivity'], number> = {
+export const SENSITIVITY_THRESHOLDS: Readonly<Record<SensitivityLevel, number>> = {
   careful: 0.85,
-  balanced: 0.70,
+  balanced: 0.7,
   eager: 0.55,
 };
 
-export const SUGGESTION_TTL_MS = 60_000;       // 60 seconds expiry unless pinned (SG-4)
-export const SUGGESTION_COOLDOWN_MS = 120_000; // 2 minutes cooldown after show/dismiss (SG-4)
-export const SUGGESTION_RATE_LIMIT_MS = 1_000; // Max 1 new card per second (PRD §8)
-export const MAX_TRAY_SUGGESTIONS = 5;         // Up to 5 cards in tray (SG-1)
+export const SUGGESTION_TTL_MS = 60_000;
+export const SUGGESTION_COOLDOWN_MS = 120_000;
+export const SUGGESTION_RATE_LIMIT_MS = 1_000;
+export const MAX_TRAY_SUGGESTIONS = 5;
 
-export interface CandidateSuggestionInput {
-  kind: SuggestionKind;
-  reason: Reason;
-  confidence: number;
-  band?: 'high' | 'medium';
-  heard: string;
-  payload: ScripturePayload | SongPayload | TextPayload;
-}
-
-/**
- * Generates a deterministic ID for a suggestion so interim and final transcripts
- * for the same verse/song/text merge in place (SG-5).
- * Also normalises chapter-only vs specific-verse upgrades on the same book+chapter
- * when raised within the same utterance window.
- */
 export function buildStableSuggestionId(
   kind: SuggestionKind,
-  payload: ScripturePayload | SongPayload | TextPayload
+  payload: SuggestionPayload
 ): string {
   if (kind === 'scripture') {
     const p = payload as ScripturePayload;
-    const vStart = p.verseStart || 1;
+    const vStart = p.verseStart ?? 1;
     const vEnd = p.verseEnd && p.verseEnd > vStart ? `-${p.verseEnd}` : '';
     return `scripture:${p.book}:${p.chapter}:${vStart}${vEnd}`;
   }
@@ -72,25 +45,13 @@ export class SuggestionEngine {
   private cooldownUntil = new Map<string, number>();
   private lastNewCardAt = 0;
 
-  getThreshold(sensitivity: VoiceSettings['sensitivity'] = 'balanced'): number {
-    return SENSITIVITY_THRESHOLDS[sensitivity] ?? 0.70;
+  getThreshold(sensitivity: SensitivityLevel = 'balanced'): number {
+    return SENSITIVITY_THRESHOLDS[sensitivity] ?? 0.7;
   }
 
-  /**
-   * Ingests a candidate suggestion from any detector.
-   * Returns `{ changed: boolean, createdNew: boolean, suggestions: Suggestion[] }`.
-   */
-  ingest(
-    candidate: CandidateSuggestionInput,
-    options: {
-      sensitivity?: VoiceSettings['sensitivity'];
-      now?: number;
-      bypassRateLimit?: boolean;
-    } = {}
-  ): { changed: boolean; createdNew: boolean; suggestions: Suggestion[] } {
+  ingest(candidate: CandidateSuggestionInput, options: IngestOptions = {}): IngestResult {
     const now = options.now ?? Date.now();
-    const sensitivity = options.sensitivity ?? 'balanced';
-    const threshold = this.getThreshold(sensitivity);
+    const threshold = this.getThreshold(options.sensitivity ?? 'balanced');
 
     this.pruneExpired(now);
 
@@ -100,55 +61,42 @@ export class SuggestionEngine {
 
     const id = buildStableSuggestionId(candidate.kind, candidate.payload);
     const cleanHeard = sanitizeTranscriptText(candidate.heard, 160);
-    const band: 'high' | 'medium' =
-      candidate.band || (candidate.confidence >= 0.85 ? 'high' : 'medium');
+    const band: ConfidenceBand =
+      candidate.band ?? (candidate.confidence >= 0.85 ? 'high' : 'medium');
 
-    // Check if an existing active card can be merged in place (SG-5)
-    // Also check if a chapter-only scripture card on the same book+chapter should upgrade in place to a specific verse!
-    let existingIdx = this.suggestions.findIndex((s) => s.id === id);
-    if (existingIdx < 0 && candidate.kind === 'scripture') {
-      const sp = candidate.payload as ScripturePayload;
-      existingIdx = this.suggestions.findIndex((s) => {
-        if (s.kind !== 'scripture') return false;
-        const ep = s.payload as ScripturePayload;
-        return (
-          ep.book === sp.book &&
-          ep.chapter === sp.chapter &&
-          Math.abs(now - s.createdAt) < 10_000 &&
-          (ep.verseStart === 1 || s.band === 'medium')
-        );
-      });
-    }
+    const existingIdx = this.findMergeIndex(id, candidate, now);
+    const existing = existingIdx >= 0 ? this.suggestions[existingIdx] : undefined;
 
-    if (existingIdx >= 0) {
-      const prev = this.suggestions[existingIdx];
-      const updated: Suggestion = {
-        ...prev,
+    if (existing && existingIdx >= 0) {
+      this.suggestions[existingIdx] = {
+        ...existing,
         id,
         reason: candidate.reason,
-        confidence: Math.max(prev.confidence, candidate.confidence),
-        band: prev.band === 'high' || band === 'high' ? 'high' : 'medium',
-        heard: cleanHeard || prev.heard,
-        expiresAt: prev.pinned ? prev.expiresAt : now + SUGGESTION_TTL_MS,
+        confidence: Math.max(existing.confidence, candidate.confidence),
+        band: existing.band === 'high' || band === 'high' ? 'high' : 'medium',
+        heard: cleanHeard || existing.heard,
+        expiresAt: existing.pinned ? existing.expiresAt : now + SUGGESTION_TTL_MS,
         payload: candidate.payload,
       };
-      this.suggestions[existingIdx] = updated;
       this.sortAndCap();
       return { changed: true, createdNew: false, suggestions: this.getActive(now) };
     }
 
-    // Check 2-minute cooldown for dismissed or already-shown items (SG-4)
     const coolUntil = this.cooldownUntil.get(id);
     if (coolUntil && now < coolUntil) {
       return { changed: false, createdNew: false, suggestions: this.getActive(now) };
     }
 
-    // Rate-limit new card creation (max 1 new card per second: PRD §8)
-    if (!options.bypassRateLimit && this.lastNewCardAt > 0 && now - this.lastNewCardAt < SUGGESTION_RATE_LIMIT_MS) {
+    if (
+      !options.bypassRateLimit &&
+      this.lastNewCardAt > 0 &&
+      now - this.lastNewCardAt < SUGGESTION_RATE_LIMIT_MS
+    ) {
       return { changed: false, createdNew: false, suggestions: this.getActive(now) };
     }
 
-    const newCard: Suggestion = {
+    this.lastNewCardAt = now;
+    this.suggestions.unshift({
       id,
       kind: candidate.kind,
       reason: candidate.reason,
@@ -159,17 +107,32 @@ export class SuggestionEngine {
       expiresAt: now + SUGGESTION_TTL_MS,
       pinned: false,
       payload: candidate.payload,
-    };
-
-    this.lastNewCardAt = now;
-    this.suggestions.unshift(newCard);
+    });
     this.sortAndCap();
     return { changed: true, createdNew: true, suggestions: this.getActive(now) };
   }
 
-  /**
-   * Marks a suggestion as shown or dismissed: removes it from the tray and places it on a 2-minute cooldown.
-   */
+  private findMergeIndex(
+    id: string,
+    candidate: CandidateSuggestionInput,
+    now: number
+  ): number {
+    const exactIdx = this.suggestions.findIndex((s) => s.id === id);
+    if (exactIdx >= 0 || candidate.kind !== 'scripture') return exactIdx;
+
+    const sp = candidate.payload as ScripturePayload;
+    return this.suggestions.findIndex((s) => {
+      if (s.kind !== 'scripture') return false;
+      const ep = s.payload as ScripturePayload;
+      return (
+        ep.book === sp.book &&
+        ep.chapter === sp.chapter &&
+        Math.abs(now - s.createdAt) < 10_000 &&
+        (ep.verseStart === 1 || s.band === 'medium')
+      );
+    });
+  }
+
   markShownOrDismissed(id: string, now = Date.now()): Suggestion[] {
     this.cooldownUntil.set(id, now + SUGGESTION_COOLDOWN_MS);
     this.suggestions = this.suggestions.filter((s) => s.id !== id);
@@ -193,8 +156,8 @@ export class SuggestionEngine {
   pruneExpired(now = Date.now()): boolean {
     const before = this.suggestions.length;
     this.suggestions = this.suggestions.filter((s) => s.pinned || s.expiresAt > now);
-    for (const [k, until] of this.cooldownUntil.entries()) {
-      if (now >= until) this.cooldownUntil.delete(k);
+    for (const [key, until] of this.cooldownUntil.entries()) {
+      if (now >= until) this.cooldownUntil.delete(key);
     }
     return this.suggestions.length !== before;
   }

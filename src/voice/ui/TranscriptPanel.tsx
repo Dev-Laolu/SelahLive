@@ -2,20 +2,15 @@
 
 import React, { useMemo, useState } from 'react';
 import Icon from '@/components/Icon';
-import { useVoice } from '../VoiceContext';
 import { parseSpokenReferences } from '../detectors/spokenReferenceParser';
 import { sanitizeTranscriptText } from '../suggestions/safety';
+import { useVoice } from '../VoiceContext';
+import type { TranscriptPanelProps } from './type';
 
-/**
- * Collapsible Live Transcript Panel (TR-1, TR-2 & PRD §8).
- * - Kept in memory only (last ~5 minutes), never saved or synced.
- * - Renders strictly as escaped plain text (never innerHTML) with detected scripture references highlighted as spans.
- */
-export function TranscriptPanel({ defaultOpen = true }: { defaultOpen?: boolean }) {
+export function TranscriptPanel({ defaultOpen = true }: TranscriptPanelProps) {
   const { settings, isListening, isPaused, activeEngineDetail, transcript, clearTranscript } =
     useVoice();
   const [open, setOpen] = useState(defaultOpen);
-
   const visibleSegments = useMemo(() => transcript.slice(-18), [transcript]);
 
   if (!settings.enabled && transcript.length === 0) return null;

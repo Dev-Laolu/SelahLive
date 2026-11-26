@@ -1,49 +1,10 @@
-import type { TranscriptSegment } from '../types';
-import type { WhisperModelId } from '../asr/voiceModels';
-
-export interface WorkerMicTestResult {
-  durationMs: number;
-  sampleCount: number;
-  sampleRate: number;
-  avgRms: number;
-  peak: number;
-  clipping: boolean;
-  transcriptPreview?: string;
-  modelLoaded?: WhisperModelId | null;
-}
-
-export interface WorkerBenchmarkResult {
-  modelId: WhisperModelId;
-  backend: 'webgpu' | 'wasm';
-  audioDurationMs: number;
-  inferenceMs: number;
-  rtf: number;
-}
-
-export interface WorkerRtfMetric {
-  modelId: WhisperModelId;
-  backend: 'webgpu' | 'wasm';
-  audioDurationMs: number;
-  inferenceMs: number;
-  rtf: number;
-}
-
-export interface ModelProgressEvent {
-  modelId: WhisperModelId;
-  progress: number; // 0..1
-  loadedBytes?: number;
-  totalBytes?: number;
-  file?: string;
-}
-
-export interface WorkerClientCallbacks {
-  onTranscriptSegment?: (segment: TranscriptSegment) => void;
-  onModelProgress?: (ev: ModelProgressEvent) => void;
-  onModelReady?: (info: { modelId: WhisperModelId; hfRepo: string; backend: 'webgpu' | 'wasm' }) => void;
-  onModelError?: (info: { modelId: WhisperModelId; error: string }) => void;
-  onDecodeError?: (info: { modelId: WhisperModelId | null; error: string }) => void;
-  onRtfMetric?: (metric: WorkerRtfMetric) => void;
-}
+import type { WhisperBackend, WhisperModelId } from '../asr/type';
+import type { TranscriptSegment } from '../type';
+import type {
+  WorkerBenchmarkResult,
+  WorkerClientCallbacks,
+  WorkerMicTestResult,
+} from './type';
 
 export class VoiceWorkerClient {
   private worker: Worker | null = null;
@@ -56,7 +17,7 @@ export class VoiceWorkerClient {
   } | null = null;
   private modelLoadResolvers = new Map<
     WhisperModelId,
-    { resolve: (info: { backend: 'webgpu' | 'wasm' }) => void; reject: (err: Error) => void }
+    { resolve: (info: { backend: WhisperBackend }) => void; reject: (err: Error) => void }
   >();
 
   setCallbacks(cb: WorkerClientCallbacks): void {
@@ -67,87 +28,123 @@ export class VoiceWorkerClient {
     if (this.worker || typeof window === 'undefined') return;
     try {
       this.worker = new Worker('/workers/voice-worker.js', { type: 'module' });
-      this.worker.onmessage = (ev: MessageEvent) => {
-        const d = ev.data || {};
-        if (d.type === 'ready') {
-          this.ready = true;
-        } else if (d.type === 'transcript-segment' && d.segment) {
-          this.callbacks.onTranscriptSegment?.(d.segment as TranscriptSegment);
-        } else if (d.type === 'rtf-metric') {
-          this.callbacks.onRtfMetric?.({
-            modelId: d.modelId,
-            backend: d.backend || 'wasm',
-            audioDurationMs: d.audioDurationMs || 1000,
-            inferenceMs: d.inferenceMs || 0,
-            rtf: d.rtf || 0,
-          });
-        } else if (d.type === 'benchmark-complete' && this.benchmarkResolver) {
-          const { resolve } = this.benchmarkResolver;
-          this.benchmarkResolver = null;
-          resolve({
-            modelId: d.modelId,
-            backend: d.backend || 'wasm',
-            audioDurationMs: d.audioDurationMs || 2000,
-            inferenceMs: d.inferenceMs || 0,
-            rtf: d.rtf || 0,
-          });
-        } else if (d.type === 'benchmark-error' && this.benchmarkResolver) {
-          const { reject } = this.benchmarkResolver;
-          this.benchmarkResolver = null;
-          reject(new Error(d.error || 'Benchmark failed'));
-        } else if (d.type === 'model-progress') {
-          this.callbacks.onModelProgress?.({
-            modelId: d.modelId,
-            progress: d.progress || 0,
-            loadedBytes: d.loadedBytes,
-            totalBytes: d.totalBytes,
-            file: d.file,
-          });
-        } else if (d.type === 'model-ready') {
-          const pending = this.modelLoadResolvers.get(d.modelId);
-          if (pending) {
-            this.modelLoadResolvers.delete(d.modelId);
-            pending.resolve({ backend: d.backend || 'wasm' });
-          }
-          this.callbacks.onModelReady?.({
-            modelId: d.modelId,
-            hfRepo: d.hfRepo,
-            backend: d.backend || 'wasm',
-          });
-        } else if (d.type === 'model-error') {
-          const pending = this.modelLoadResolvers.get(d.modelId);
-          if (pending) {
-            this.modelLoadResolvers.delete(d.modelId);
-            pending.reject(new Error(d.error || 'Model failed to load'));
-          }
-          this.callbacks.onModelError?.({
-            modelId: d.modelId,
-            error: d.error || 'Model failed to load',
-          });
-        } else if (d.type === 'decode-error') {
-          this.callbacks.onDecodeError?.({
-            modelId: d.modelId || null,
-            error: d.error || 'Whisper transcription error',
-          });
-        } else if (d.type === 'mic-test-complete' && this.micTestResolver) {
-          const resolve = this.micTestResolver;
-          this.micTestResolver = null;
-          resolve({
-            durationMs: d.durationMs || 3000,
-            sampleCount: d.sampleCount || 0,
-            sampleRate: d.sampleRate || 16000,
-            avgRms: d.avgRms || 0,
-            peak: d.peak || 0,
-            clipping: !!d.clipping,
-            transcriptPreview: d.transcriptPreview || '',
-            modelLoaded: d.modelLoaded || null,
-          });
-        }
-      };
+      this.worker.onmessage = (ev: MessageEvent) => this.handleMessage(ev.data ?? {});
       this.worker.postMessage({ type: 'init' });
     } catch {
       this.worker = null;
       this.ready = false;
+    }
+  }
+
+  private handleMessage(data: Record<string, unknown>): void {
+    const type = data.type as string | undefined;
+    switch (type) {
+      case 'ready':
+        this.ready = true;
+        return;
+
+      case 'transcript-segment':
+        if (data.segment) {
+          this.callbacks.onTranscriptSegment?.(data.segment as TranscriptSegment);
+        }
+        return;
+
+      case 'rtf-metric':
+        this.callbacks.onRtfMetric?.({
+          modelId: data.modelId as WhisperModelId,
+          backend: (data.backend as WhisperBackend) || 'wasm',
+          audioDurationMs: Number(data.audioDurationMs) || 1000,
+          inferenceMs: Number(data.inferenceMs) || 0,
+          rtf: Number(data.rtf) || 0,
+        });
+        return;
+
+      case 'benchmark-complete':
+        if (this.benchmarkResolver) {
+          const { resolve } = this.benchmarkResolver;
+          this.benchmarkResolver = null;
+          resolve({
+            modelId: data.modelId as WhisperModelId,
+            backend: (data.backend as WhisperBackend) || 'wasm',
+            audioDurationMs: Number(data.audioDurationMs) || 2000,
+            inferenceMs: Number(data.inferenceMs) || 0,
+            rtf: Number(data.rtf) || 0,
+          });
+        }
+        return;
+
+      case 'benchmark-error':
+        if (this.benchmarkResolver) {
+          const { reject } = this.benchmarkResolver;
+          this.benchmarkResolver = null;
+          reject(new Error(String(data.error || 'Benchmark failed')));
+        }
+        return;
+
+      case 'model-progress':
+        this.callbacks.onModelProgress?.({
+          modelId: data.modelId as WhisperModelId,
+          progress: Number(data.progress) || 0,
+          loadedBytes: data.loadedBytes as number | undefined,
+          totalBytes: data.totalBytes as number | undefined,
+          file: data.file as string | undefined,
+        });
+        return;
+
+      case 'model-ready': {
+        const modelId = data.modelId as WhisperModelId;
+        const backend = (data.backend as WhisperBackend) || 'wasm';
+        const pending = this.modelLoadResolvers.get(modelId);
+        if (pending) {
+          this.modelLoadResolvers.delete(modelId);
+          pending.resolve({ backend });
+        }
+        this.callbacks.onModelReady?.({
+          modelId,
+          hfRepo: String(data.hfRepo || ''),
+          backend,
+        });
+        return;
+      }
+
+      case 'model-error': {
+        const modelId = data.modelId as WhisperModelId;
+        const errorMsg = String(data.error || 'Model failed to load');
+        const pending = this.modelLoadResolvers.get(modelId);
+        if (pending) {
+          this.modelLoadResolvers.delete(modelId);
+          pending.reject(new Error(errorMsg));
+        }
+        this.callbacks.onModelError?.({ modelId, error: errorMsg });
+        return;
+      }
+
+      case 'decode-error':
+        this.callbacks.onDecodeError?.({
+          modelId: (data.modelId as WhisperModelId | null) ?? null,
+          error: String(data.error || 'Whisper transcription error'),
+        });
+        return;
+
+      case 'mic-test-complete':
+        if (this.micTestResolver) {
+          const resolve = this.micTestResolver;
+          this.micTestResolver = null;
+          resolve({
+            durationMs: Number(data.durationMs) || 3000,
+            sampleCount: Number(data.sampleCount) || 0,
+            sampleRate: Number(data.sampleRate) || 16_000,
+            avgRms: Number(data.avgRms) || 0,
+            peak: Number(data.peak) || 0,
+            clipping: Boolean(data.clipping),
+            transcriptPreview: String(data.transcriptPreview || ''),
+            modelLoaded: (data.modelLoaded as WhisperModelId | null) ?? null,
+          });
+        }
+        return;
+
+      default:
+        return;
     }
   }
 
@@ -163,15 +160,14 @@ export class VoiceWorkerClient {
     });
   }
 
-  downloadOrLoadModel(modelId: WhisperModelId, hfRepo?: string): Promise<{ backend: 'webgpu' | 'wasm' }> {
+  downloadOrLoadModel(
+    modelId: WhisperModelId,
+    hfRepo?: string
+  ): Promise<{ backend: WhisperBackend }> {
     if (!this.worker) this.start();
     return new Promise((resolve, reject) => {
       this.modelLoadResolvers.set(modelId, { resolve, reject });
-      this.worker?.postMessage({
-        type: 'download-model',
-        modelId,
-        hfRepo,
-      });
+      this.worker?.postMessage({ type: 'download-model', modelId, hfRepo });
     });
   }
 

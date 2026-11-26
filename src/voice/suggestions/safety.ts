@@ -1,33 +1,8 @@
-/**
- * Selah Live v2 — Voice Pipeline Safety Guard (Hard Rule #1 & SG-3)
- *
- * 1. Nothing in `/src/voice/` may ever import or call `show`, `updateLive`, `takeLive`,
- *    or emit `selah:show` / `selah:update` automatically.
- * 2. Every live broadcast action from a suggestion MUST pass through `dispatchOperatorSuggestionAction`
- *    with a verified `UserGestureToken` created directly inside a DOM click or keydown event handler.
- * 3. Transcript text sanitiser ensures plain-text rendering only (SECURITY.md §6 & PRD §8).
- */
+import type { Suggestion, SuggestionActionType } from '../type';
+import type { OperatorActionCallbacks, OperatorGestureEvent } from './type';
 
-import type { Suggestion } from '../types';
+export type { OperatorActionCallbacks, OperatorGestureEvent } from './type';
 
-export interface OperatorGestureEvent {
-  isTrusted?: boolean;
-  type: 'click' | 'keydown';
-  key?: string;
-  altKey?: boolean;
-  shiftKey?: boolean;
-}
-
-export interface OperatorActionCallbacks {
-  onShow?: (suggestion: Suggestion) => void;
-  onPreview?: (suggestion: Suggestion) => void;
-  onDismiss?: (suggestionId: string) => void;
-}
-
-/**
- * Sanitises any transcript or "heard" excerpt to plain text only, stripping control characters
- * and HTML angle brackets so no markup can ever be injected.
- */
 export function sanitizeTranscriptText(raw: unknown, maxLength = 500): string {
   if (typeof raw !== 'string') return '';
   return raw
@@ -37,25 +12,17 @@ export function sanitizeTranscriptText(raw: unknown, maxLength = 500): string {
     .slice(0, maxLength);
 }
 
-/**
- * Verifies that an operator action came from an explicit click or configured keyboard shortcut,
- * and NEVER from a voice worker message, timer, or background pipeline callback.
- */
-export function isExplicitOperatorGesture(event: OperatorGestureEvent | null | undefined): boolean {
+export function isExplicitOperatorGesture(
+  event: OperatorGestureEvent | null | undefined
+): boolean {
   if (!event || typeof event !== 'object') return false;
   if (event.type === 'click') return true;
-  if (event.type === 'keydown') {
-    return !!event.altKey;
-  }
+  if (event.type === 'keydown') return Boolean(event.altKey);
   return false;
 }
 
-/**
- * The ONLY gateway for acting on a voice suggestion.
- * Refuses to invoke `onShow` or `onPreview` unless an explicit operator click or Alt shortcut event is provided.
- */
 export function dispatchOperatorSuggestionAction(
-  action: 'show' | 'preview' | 'dismiss',
+  action: SuggestionActionType,
   suggestion: Suggestion,
   gestureEvent: OperatorGestureEvent | null | undefined,
   callbacks: OperatorActionCallbacks

@@ -1,16 +1,9 @@
 'use client';
 
 import React from 'react';
-import type { LevelReading } from '../types';
+import type { LevelMeterProps } from './type';
 
-export function LevelMeter({
-  level,
-  active,
-}: {
-  level: LevelReading;
-  active: boolean;
-}) {
-  // Map dBFS (-60..0) to 0..100% width for a logarithmic broadcast meter feel
+export function LevelMeter({ level, active }: LevelMeterProps) {
   const pct = active
     ? Math.max(0, Math.min(100, ((level.db + 60) / 60) * 100))
     : 0;

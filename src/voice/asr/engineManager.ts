@@ -1,91 +1,23 @@
-/**
- * Selah Live v2 — Phase 2 Engine Management (ST-8, ST-9, ST-10)
- *
- * Implements:
- * 1. ST-9 First-Run Speed Check & Model Recommendation:
- *    - Combines hardware capabilities (`deviceMemory`, `hardwareConcurrency`, WebGPU availability)
- *      with an on-device Whisper inference benchmark (2-second synthetic 16 kHz speech-band clip)
- *      to measure Real-Time Factor (`RTF = inferenceMs / audioDurationMs`).
- *    - Recommends:
- *      - `small.en` on strong GPUs (WebGPU + 16 GB+ RAM and RTF <= 0.35)
- *      - `base.en` by default (RTF <= 0.85)
- *      - `tiny.en` on weak laptops (4 GB RAM or RTF > 0.85)
- * 2. ST-8 Auto Engine Selection State Machine (Whisper First):
- *    - Rule 1: If a Whisper model is installed and passes the speed check (sustained RTF <= 1.0), use Whisper.
- *    - Rule 2: If no Whisper model is installed yet (first run), use Browser SpeechRecognition as a temporary bridge
- *      ONLY if on-device (`processLocally`) or `allowCloudBrowserEngine` is opted in. Show:
- *      "Using a temporary voice engine while the offline model downloads."
- *      As soon as a Whisper model finishes downloading, switch to Whisper automatically between utterances.
- *    - Rule 3: If Whisper fails to start or is too slow (sustained RTF > 1.0 over 3 consecutive utterances):
- *      - First step down to `tiny.en` if currently on `base.en` or `small.en` (and `tiny.en` is installed or can be loaded).
- *      - Otherwise fall back to Browser SpeechRecognition under the same privacy rules (on-device or cloud opt-in),
- *        with a visible fallback notice and a "Retry Whisper" button.
- *    - Rule 4: If no engine is available, disable voice suggestions cleanly with a clear explanation while leaving
- *      the rest of Selah Live unaffected.
- * 3. ST-10 Seamless Engine Switching & Performance Mode:
- *    - Switching engines or models never interrupts live OBS output, never clears current suggestions,
- *      and keeps the in-memory transcript continuous.
- *    - Performance mode forces `tiny.en` (when available) and widens interim decoding intervals inside the worker
- *      to minimize CPU/GPU usage while streaming.
- */
+import {
+  CONSECUTIVE_SLOW_UTTERANCES_LIMIT,
+  RTF_SLOW_THRESHOLD,
+  RtfMonitor,
+} from './rtfMonitor';
+import type {
+  EngineSelectionDecision,
+  EngineSelectionInput,
+  HardwareProfile,
+  ModelRecommendation,
+  WhisperModelId,
+} from './type';
 
-import type { WhisperModelId } from './voiceModels';
+export { CONSECUTIVE_SLOW_UTTERANCES_LIMIT, RTF_SLOW_THRESHOLD, RtfMonitor };
 
-export interface HardwareProfile {
-  deviceMemoryGb: number;
-  hardwareConcurrency: number;
-  hasWebGpu: boolean;
-}
-
-export interface SpeedCheckResult {
-  testedModelId: WhisperModelId;
-  backend: 'webgpu' | 'wasm';
-  audioDurationMs: number;
-  inferenceMs: number;
-  rtf: number; // inferenceMs / audioDurationMs (< 1.0 means faster than real-time)
-  recommendedModel: WhisperModelId;
-  summary: string;
-  timestamp: string;
-}
-
-export interface EngineSelectionInput {
-  preferredEngine: 'auto' | 'whisper' | 'browser';
-  preferredWhisperModel: WhisperModelId;
-  performanceMode: boolean;
-  installedModels: WhisperModelId[];
-  whisperFailedModels: WhisperModelId[];
-  whisperSlowModels: WhisperModelId[];
-  browserSupported: boolean;
-  browserProcessLocally: boolean;
-  allowCloudBrowserEngine: boolean;
-  isDownloadingWhisper: boolean;
-}
-
-export interface EngineSelectionDecision {
-  targetEngine: 'whisper' | 'browser' | 'none';
-  targetWhisperModel?: WhisperModelId;
-  mode:
-    | 'whisper'
-    | 'browser-bridge'
-    | 'browser-fallback'
-    | 'browser-manual'
-    | 'awaiting-model'
-    | 'unavailable';
-  notice: string;
-  showRetryWhisper: boolean;
-}
-
-export const RTF_SLOW_THRESHOLD = 1.0;
-export const CONSECUTIVE_SLOW_UTTERANCES_LIMIT = 3;
-
-/**
- * Recommends a default Whisper model based on hardware profile and optional benchmark RTF (ST-9).
- */
 export function recommendWhisperModel(
   hw: HardwareProfile,
   benchmarkRtf?: number,
   testedModel: WhisperModelId = 'base.en'
-): { recommendedModel: WhisperModelId; reason: string } {
+): ModelRecommendation {
   if (typeof benchmarkRtf === 'number' && benchmarkRtf > 0) {
     if (testedModel === 'base.en') {
       if (benchmarkRtf > 0.9) {
@@ -120,7 +52,6 @@ export function recommendWhisperModel(
     }
   }
 
-  // Hardware-only heuristic before a model is downloaded
   if (hw.deviceMemoryGb > 0 && hw.deviceMemoryGb <= 4 && !hw.hasWebGpu) {
     return {
       recommendedModel: 'tiny.en',
@@ -139,17 +70,29 @@ export function recommendWhisperModel(
   };
 }
 
-/**
- * Pure deterministic ST-8 Auto Engine Selection state machine.
- */
+function buildWhisperCandidateOrder(input: EngineSelectionInput): WhisperModelId[] {
+  const candidates: WhisperModelId[] = [];
+  if (input.performanceMode && input.installedModels.includes('tiny.en')) {
+    candidates.push('tiny.en');
+  }
+  if (!candidates.includes(input.preferredWhisperModel)) {
+    candidates.push(input.preferredWhisperModel);
+  }
+  const fallbacks: readonly WhisperModelId[] = ['base.en', 'tiny.en', 'small.en'];
+  for (const fallback of fallbacks) {
+    if (!candidates.includes(fallback)) {
+      candidates.push(fallback);
+    }
+  }
+  return candidates;
+}
+
 export function selectActiveAsrEngine(
   input: EngineSelectionInput
 ): EngineSelectionDecision {
   const canUseBrowser =
-    input.browserSupported &&
-    (input.browserProcessLocally || input.allowCloudBrowserEngine);
+    input.browserSupported && (input.browserProcessLocally || input.allowCloudBrowserEngine);
 
-  // 1. User explicitly chose Browser (backup)
   if (input.preferredEngine === 'browser') {
     if (canUseBrowser) {
       return {
@@ -170,53 +113,31 @@ export function selectActiveAsrEngine(
     };
   }
 
-  // Determine candidate Whisper models in priority order
-  // In Performance mode, prefer tiny.en first if installed
   const failedOrSlow = new Set<WhisperModelId>([
     ...input.whisperFailedModels,
     ...input.whisperSlowModels,
   ]);
-
-  const orderedCandidates: WhisperModelId[] = [];
-  if (input.performanceMode && input.installedModels.includes('tiny.en')) {
-    orderedCandidates.push('tiny.en');
-  }
-  if (!orderedCandidates.includes(input.preferredWhisperModel)) {
-    orderedCandidates.push(input.preferredWhisperModel);
-  }
-  // ST-8.3: If preferred model is too slow or failed, try smaller model (tiny.en) next
-  for (const fallback of ['base.en', 'tiny.en', 'small.en'] as WhisperModelId[]) {
-    if (!orderedCandidates.includes(fallback)) {
-      orderedCandidates.push(fallback);
-    }
-  }
-
-  const healthyInstalledModel = orderedCandidates.find(
+  const healthyModel = buildWhisperCandidateOrder(input).find(
     (m) => input.installedModels.includes(m) && !failedOrSlow.has(m)
   );
 
-  const hadSlowOrFailed =
-    input.whisperFailedModels.length > 0 || input.whisperSlowModels.length > 0;
-
-  // ST-8.1 & ST-8.3 (step-down to smaller Whisper model like tiny.en):
-  if (healthyInstalledModel) {
+  if (healthyModel) {
     const steppedDown =
-      healthyInstalledModel !== input.preferredWhisperModel &&
+      healthyModel !== input.preferredWhisperModel &&
       failedOrSlow.has(input.preferredWhisperModel);
     return {
       targetEngine: 'whisper',
-      targetWhisperModel: healthyInstalledModel,
+      targetWhisperModel: healthyModel,
       mode: 'whisper',
       notice: steppedDown
-        ? `Switched to lighter Whisper model (${healthyInstalledModel}) to keep real-time speed smooth.`
-        : input.performanceMode && healthyInstalledModel === 'tiny.en'
+        ? `Switched to lighter Whisper model (${healthyModel}) to keep real-time speed smooth.`
+        : input.performanceMode && healthyModel === 'tiny.en'
           ? 'Whisper tiny.en (Performance mode)'
-          : `Whisper ${healthyInstalledModel} (offline)`,
+          : `Whisper ${healthyModel} (offline)`,
       showRetryWhisper: steppedDown,
     };
   }
 
-  // ST-8.2: First run / no Whisper model installed yet -> use Browser as bridge if allowed
   if (input.installedModels.length === 0) {
     if (input.preferredEngine === 'auto' && canUseBrowser) {
       return {
@@ -237,8 +158,7 @@ export function selectActiveAsrEngine(
     };
   }
 
-  // ST-8.3: Whisper was installed, but all installed models failed or exceeded real-time factor > 1.0
-  if (hadSlowOrFailed) {
+  if (failedOrSlow.size > 0) {
     if (input.preferredEngine === 'auto' && canUseBrowser) {
       return {
         targetEngine: 'browser',
@@ -263,47 +183,4 @@ export function selectActiveAsrEngine(
     notice: 'No voice recognition engine is currently available.',
     showRetryWhisper: false,
   };
-}
-
-/**
- * Tracks rolling Real-Time Factor (RTF = inferenceMs / audioDurationMs) across utterances (ST-8.3).
- * Flags the current model as too slow only when RTF > 1.0 for 3 consecutive utterances
- * (so a single one-off CPU spike never causes an unnecessary fallback).
- */
-export class RtfMonitor {
-  private consecutiveSlow = 0;
-  private recentRtfs: number[] = [];
-
-  recordUtterance(audioDurationMs: number, inferenceMs: number): {
-    rtf: number;
-    avgRtf: number;
-    isSustainedSlow: boolean;
-  } {
-    const safeDur = Math.max(250, audioDurationMs);
-    const rtf = Number((inferenceMs / safeDur).toFixed(2));
-    this.recentRtfs.push(rtf);
-    if (this.recentRtfs.length > 6) {
-      this.recentRtfs.shift();
-    }
-
-    if (rtf > RTF_SLOW_THRESHOLD) {
-      this.consecutiveSlow++;
-    } else {
-      this.consecutiveSlow = 0;
-    }
-
-    const avgRtf =
-      this.recentRtfs.reduce((a, b) => a + b, 0) / this.recentRtfs.length;
-
-    return {
-      rtf,
-      avgRtf: Number(avgRtf.toFixed(2)),
-      isSustainedSlow: this.consecutiveSlow >= CONSECUTIVE_SLOW_UTTERANCES_LIMIT,
-    };
-  }
-
-  reset(): void {
-    this.consecutiveSlow = 0;
-    this.recentRtfs = [];
-  }
 }

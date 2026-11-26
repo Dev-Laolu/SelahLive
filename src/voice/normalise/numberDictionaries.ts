@@ -1,0 +1,101 @@
+export const ONES: Readonly<Record<string, number>> = {
+  zero: 0,
+  one: 1,
+  won: 1,
+  two: 2,
+  to: 2,
+  too: 2,
+  three: 3,
+  four: 4,
+  for: 4,
+  fore: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  ate: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+};
+
+export const STRICT_ONES: Readonly<Record<string, number>> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+};
+
+export const TENS: Readonly<Record<string, number>> = {
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fourty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90,
+};
+
+export const ORDINAL_WORDS: Readonly<Record<string, number>> = {
+  first: 1, '1st': 1,
+  second: 2, '2nd': 2,
+  third: 3, '3rd': 3,
+  fourth: 4, '4th': 4,
+  fifth: 5, '5th': 5,
+  sixth: 6, '6th': 6,
+  seventh: 7, '7th': 7,
+  eighth: 8, '8th': 8,
+  ninth: 9, '9th': 9,
+  tenth: 10, '10th': 10,
+  eleventh: 11, '11th': 11,
+  twelfth: 12, '12th': 12,
+  thirteenth: 13, '13th': 13,
+  fourteenth: 14, '14th': 14,
+  fifteenth: 15, '15th': 15,
+  sixteenth: 16, '16th': 16,
+  seventeenth: 17, '17th': 17,
+  eighteenth: 18, '18th': 18,
+  nineteenth: 19, '19th': 19,
+  twentieth: 20, '20th': 20,
+  thirtieth: 30, '30th': 30,
+  fortieth: 40, '40th': 40,
+  fiftieth: 50, '50th': 50,
+  sixtieth: 60, '60th': 60,
+  seventieth: 70, '70th': 70,
+  eightieth: 80, '80th': 80,
+  ninetieth: 90, '90th': 90,
+  hundredth: 100, '100th': 100,
+};
+
+export function parseSingleNumberToken(token: string): number | null {
+  const clean = token.toLowerCase().trim();
+  if (/^\d+$/.test(clean)) return parseInt(clean, 10);
+  const ordMatch = clean.match(/^(\d+)(?:st|nd|rd|th)$/);
+  if (ordMatch?.[1]) return parseInt(ordMatch[1], 10);
+  return STRICT_ONES[clean] ?? TENS[clean] ?? ORDINAL_WORDS[clean] ?? null;
+}

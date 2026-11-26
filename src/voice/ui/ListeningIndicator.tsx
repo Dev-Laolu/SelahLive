@@ -4,10 +4,6 @@ import React from 'react';
 import Icon from '@/components/Icon';
 import { useVoice } from '../VoiceContext';
 
-/**
- * VA-6 & PRD §8: Persistent Listening indicator in the top bar whenever Voice is enabled,
- * with one-click Pause / Resume listening and hotkey hint (Alt+L).
- */
 export function ListeningIndicator() {
   const { settings, isListening, isPaused, togglePauseListening } = useVoice();
 

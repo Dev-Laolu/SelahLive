@@ -10,19 +10,21 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "paths": {
+      "@/lib/db": ["./src/voice/ambient/db.d.ts"],
+      "@/lib/bible": ["./src/voice/ambient/bible.d.ts"],
+      "@/lib/store": ["./src/voice/ambient/store.d.ts"],
+      "@/components/Icon": ["./src/voice/ambient/icon.d.ts"],
+      "@/components/Select": ["./src/voice/ambient/select.d.ts"],
+      "@/components/Toast": ["./src/voice/ambient/toast.d.ts"],
+      "@/*": ["./src/*", "./*"]
+    }
   },
   "include": [
     "next-env.d.ts",
-    "src/shared/**/*.ts",
-    "src/shared/**/*.tsx",
-    "src/modules/**/*.ts",
-    "src/modules/**/*.tsx",
-    "src/server/**/*.ts",
-    "src/app/**/*.ts",
-    "src/app/**/*.tsx",
-    "src/tests/**/*.ts",
-    "src/tests/**/*.tsx"
+    "src/**/*.ts",
+    "src/**/*.tsx"
   ],
   "exclude": [
     "node_modules",

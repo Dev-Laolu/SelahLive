@@ -2,15 +2,11 @@
 
 import React from 'react';
 import Icon from '@/components/Icon';
-import { useApp } from '@/lib/store';
 import { useToast } from '@/components/Toast';
-import { useVoice } from '../VoiceContext';
+import { useApp } from '@/lib/store';
 import { formatBytes, type WhisperModelId } from '../asr/voiceModels';
+import { useVoice } from '../VoiceContext';
 
-/**
- * Library -> Voice models tab (ST-4 & PRD §6).
- * NOTE FOR DESIGN REVIEW: New v2 tab inside `/app/library` built strictly with existing `/design/` tokens and `.libwide` / `.card` layout.
- */
 export function VoiceModelsTab() {
   const { online } = useApp();
   const toast = useToast();
@@ -20,7 +16,6 @@ export function VoiceModelsTab() {
     hardwareProfile,
     recommendedModel,
     recommendationReason,
-    speedCheckResult,
     isRunningSpeedCheck,
     runFirstRunSpeedCheck,
     modelCatalog,
@@ -61,7 +56,16 @@ export function VoiceModelsTab() {
           Download a voice model once while online. After downloading, Selah Live transcribes the pastor&apos;s microphone{' '}
           <b>entirely offline on this computer</b> and suggests Scriptures without ever sending audio to the internet.
         </p>
-        <div className="row between wrap" style={{ gap: 8, marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)', fontSize: 12 }}>
+        <div
+          className="row between wrap"
+          style={{
+            gap: 8,
+            marginTop: 4,
+            paddingTop: 8,
+            borderTop: '1px solid var(--border)',
+            fontSize: 12,
+          }}
+        >
           <div>
             <b>Recommended for this computer:</b>{' '}
             <span className="gold">{recommendedModel}</span>{' '}
@@ -79,7 +83,9 @@ export function VoiceModelsTab() {
               onClick={async () => {
                 const res = await runFirstRunSpeedCheck();
                 if (res) {
-                  toast(`Speed check: ${res.rtf.toFixed(2)}× real-time (${res.inferenceMs} ms for 2 s clip). Recommended: ${res.recommendedModel}`);
+                  toast(
+                    `Speed check: ${res.rtf.toFixed(2)}× real-time (${res.inferenceMs} ms for 2 s clip). Recommended: ${res.recommendedModel}`
+                  );
                 }
               }}
             >
@@ -111,25 +117,22 @@ export function VoiceModelsTab() {
                 <div className="col" style={{ gap: 3 }}>
                   <div className="row wrap" style={{ gap: 8 }}>
                     <b>{m.name}</b>
-                    <span className="chip" style={{ fontSize: 11 }}>
-                      {m.badge}
-                    </span>
+                    <span className="chip" style={{ fontSize: 11 }}>{m.badge}</span>
                     {isSelectedDefault && (
-                      <span className="chip gold" style={{ fontSize: 11 }}>
-                        Active model
-                      </span>
+                      <span className="chip gold" style={{ fontSize: 11 }}>Active model</span>
                     )}
                   </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {m.description}
-                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>{m.description}</div>
                   <div className="muted mono" style={{ fontSize: 11 }}>
                     Source: {m.hfRepo} (Quantised ONNX)
                     {installed ? ` · Ready (${installed.backend.toUpperCase()})` : ''}
                   </div>
                 </div>
 
-                <span className="muted mono" title={sizeInfo?.isExact ? 'Exact size from Hugging Face Hub' : 'Estimated quantised download size'}>
+                <span
+                  className="muted mono"
+                  title={sizeInfo?.isExact ? 'Exact size from Hugging Face Hub' : 'Estimated quantised download size'}
+                >
                   {sizeInfo?.isExact ? '' : '~'}{formatBytes(displayBytes)}
                 </span>
 
